@@ -14,8 +14,14 @@ import WorkerManagement from './pages/WorkerManagement';
 import PaymentManagement from './pages/PaymentManagement';
 import CreateUser from './pages/CreateUser';
 import EditUser from './pages/EditUser';
+import PaymentList from './pages/PaymentList';
+import PaymentStart from './pages/PaymentStart';
+import Bills from './pages/Bills';
+import BillEdit from './pages/BillEdit';
+import BillCreate from './pages/BillCreate';
 import './App.css';
 import { AuthProvider } from './services/AuthContext';
+
 
 function App() {
   return (
@@ -57,6 +63,33 @@ function App() {
         </div>
       </Router>
     </AuthProvider>
+    <Router>
+      <div className="app">
+        <Navbar />
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/my-reservations" element={<MyReservations />} />
+            <Route path="/my-reservations/:id" element={<ReservationDetail />} />
+            <Route path="/book-new-reservation" element={<BookNewReservation />} />
+            <Route path="/book-room" element={<BookRoomForm />} />
+            <Route path="/users" element={<UserManagement />} />
+            <Route path="/reservations" element={<ReservationManagement />} />
+            <Route path="/rooms" element={<RoomManagement />} />
+            <Route path="/workers" element={<WorkerManagement />} />
+            <Route path="/payments" element={<PaymentManagement />} />
+            <Route path="/payments/all" element={<PaymentList />} />
+            <Route path="/payments/new" element={<PaymentStart />} />
+            <Route path="/payments/bills" element={<Bills />} />
+            <Route path="/payments/bills/new" element={<BillCreate />} />
+            <Route path="/payments/bills/:id" element={<BillEdit />} />
+
+          </Routes>
+        </main>
+      </div>
+    </Router>
   );
 }
 
