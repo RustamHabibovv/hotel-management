@@ -22,7 +22,6 @@ import BillCreate from './pages/BillCreate';
 import './App.css';
 import { AuthProvider } from './services/AuthContext';
 
-
 function App() {
   return (
     <AuthProvider>
@@ -34,63 +33,35 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+
               <Route path="/my-reservations" element={<MyReservations />} />
-              <Route
-                path="/my-reservations/:id"
-                element={<ReservationDetail />}
-              />
-              <Route
-                path="/book-new-reservation"
-                element={<BookNewReservation />}
-              />
+              <Route path="/my-reservations/:id" element={<ReservationDetail />} />
+
+              <Route path="/book-new-reservation" element={<BookNewReservation />} />
               <Route path="/book-room" element={<BookRoomForm />} />
 
-              {/* USER MANAGEMENT */}
+              {/* USERS */}
               <Route path="/users" element={<UserManagement />} />
               <Route path="/users/new" element={<CreateUser />} />
               <Route path="/users/:id/edit" element={<EditUser />} />
 
-              {/* OTHER MANAGEMENT PAGES */}
-              <Route
-                path="/reservations"
-                element={<ReservationManagement />}
-              />
+              {/* MANAGEMENT */}
+              <Route path="/reservations" element={<ReservationManagement />} />
               <Route path="/rooms" element={<RoomManagement />} />
               <Route path="/workers" element={<WorkerManagement />} />
+
+              {/* PAYMENTS */}
               <Route path="/payments" element={<PaymentManagement />} />
+              <Route path="/payments/all" element={<PaymentList />} />
+              <Route path="/payments/new" element={<PaymentStart />} />
+              <Route path="/payments/bills" element={<Bills />} />
+              <Route path="/payments/bills/new" element={<BillCreate />} />
+              <Route path="/payments/bills/:id" element={<BillEdit />} />
             </Routes>
           </main>
         </div>
       </Router>
     </AuthProvider>
-    <Router>
-      <div className="app">
-        <Navbar />
-        <main className="main-content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/my-reservations" element={<MyReservations />} />
-            <Route path="/my-reservations/:id" element={<ReservationDetail />} />
-            <Route path="/book-new-reservation" element={<BookNewReservation />} />
-            <Route path="/book-room" element={<BookRoomForm />} />
-            <Route path="/users" element={<UserManagement />} />
-            <Route path="/reservations" element={<ReservationManagement />} />
-            <Route path="/rooms" element={<RoomManagement />} />
-            <Route path="/workers" element={<WorkerManagement />} />
-            <Route path="/payments" element={<PaymentManagement />} />
-            <Route path="/payments/all" element={<PaymentList />} />
-            <Route path="/payments/new" element={<PaymentStart />} />
-            <Route path="/payments/bills" element={<Bills />} />
-            <Route path="/payments/bills/new" element={<BillCreate />} />
-            <Route path="/payments/bills/:id" element={<BillEdit />} />
-
-          </Routes>
-        </main>
-      </div>
-    </Router>
   );
 }
-
 export default App;
