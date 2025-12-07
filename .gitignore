@@ -38,4 +38,8 @@ ENV/
 media/
 staticfiles/
 
+# Test and utility scripts
+test_*.py
+set_default_passwords.py
+
 .env

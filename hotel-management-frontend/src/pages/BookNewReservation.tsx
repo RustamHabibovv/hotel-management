@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { mockRooms } from '../data/mockRooms';
-import type { Room } from '../data/mockRooms';
+import roomService, { type Room } from '../services/roomService';
 import '../styles/BookNewReservation.css';
 
 const BookNewReservation = () => {
@@ -13,24 +12,57 @@ const BookNewReservation = () => {
     roomType: 'all'
   });
 
-  const [filteredRooms, setFilteredRooms] = useState<Room[]>(mockRooms);
+  const [allRooms, setAllRooms] = useState<Room[]>([]);
+  const [filteredRooms, setFilteredRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch rooms on component mount
+  useEffect(() => {
+    fetchRooms();
+  }, []);
+
+  const fetchRooms = async (withFilters = false) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Build filters object
+      const filters: any = {};
+      
+      if (withFilters) {
+        // Only pass date filters if both dates are selected
+        if (searchFilters.checkIn && searchFilters.checkOut) {
+          filters.checkIn = searchFilters.checkIn;
+          filters.checkOut = searchFilters.checkOut;
+        }
+        
+        if (searchFilters.roomType && searchFilters.roomType !== 'all') {
+          filters.roomType = searchFilters.roomType;
+        }
+      }
+      
+      const rooms = await roomService.getAvailableRooms(Object.keys(filters).length > 0 ? filters : undefined);
+      
+      // Apply client-side capacity filter
+      let filtered = rooms.filter(room => room.isAvailable);
+      if (withFilters && searchFilters.guests > 0) {
+        filtered = filtered.filter(room => room.capacity >= searchFilters.guests);
+      }
+      
+      setAllRooms(rooms);
+      setFilteredRooms(filtered);
+    } catch (err) {
+      console.error('Error fetching rooms:', err);
+      setError('Failed to load available rooms. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSearch = () => {
-    let filtered = mockRooms.filter(room => room.isAvailable);
-
-    // Filter by capacity
-    if (searchFilters.guests > 0) {
-      filtered = filtered.filter(room => room.capacity >= searchFilters.guests);
-    }
-
-    // Filter by room type
-    if (searchFilters.roomType !== 'all') {
-      filtered = filtered.filter(room => 
-        room.roomType.toLowerCase().includes(searchFilters.roomType.toLowerCase())
-      );
-    }
-
-    setFilteredRooms(filtered);
+    // Fetch rooms with filters from backend
+    fetchRooms(true);
   };
 
   const handleBookRoom = (room: Room) => {
@@ -55,6 +87,52 @@ const BookNewReservation = () => {
   };
 
   const nights = calculateNights(searchFilters.checkIn, searchFilters.checkOut);
+
+  if (loading) {
+    return (
+      <div className="book-new-reservation">
+        <div className="booking-header">
+          <button className="back-button" onClick={() => navigate('/my-reservations')}>
+            ← Back to My Reservations
+          </button>
+          <h1>🏨 Book a New Reservation</h1>
+        </div>
+        <div className="loading-container" style={{ textAlign: 'center', padding: '3rem' }}>
+          <div className="loading-spinner">Loading available rooms...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="book-new-reservation">
+        <div className="booking-header">
+          <button className="back-button" onClick={() => navigate('/my-reservations')}>
+            ← Back to My Reservations
+          </button>
+          <h1>🏨 Book a New Reservation</h1>
+        </div>
+        <div className="error-container" style={{ textAlign: 'center', padding: '3rem' }}>
+          <p style={{ color: '#e74c3c', fontSize: '1.1rem' }}>{error}</p>
+          <button 
+            onClick={fetchRooms}
+            style={{ 
+              marginTop: '1rem', 
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#4a90e2',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="book-new-reservation">
@@ -152,7 +230,18 @@ const BookNewReservation = () => {
             {filteredRooms.map((room) => (
               <div key={room.id} className="room-card">
                 <div className="room-image">
-                  <img src={room.images[0]} alt={room.roomType} />
+                  <div style={{ 
+                    width: '100%', 
+                    height: '200px', 
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '3rem',
+                    color: 'white'
+                  }}>
+                    🏨
+                  </div>
                   {!room.isAvailable && (
                     <div className="unavailable-badge">Not Available</div>
                   )}
@@ -164,34 +253,34 @@ const BookNewReservation = () => {
                     <div className="room-number">Room {room.roomNumber}</div>
                   </div>
 
-                  <p className="room-description">{room.description}</p>
+                  <p className="room-description">
+                    {room.amenities || 'Comfortable room with modern amenities'}
+                    {room.scenery && ` • ${room.scenery} view`}
+                  </p>
 
                   <div className="room-details">
                     <div className="detail-item">
                       <span className="detail-icon">🛏️</span>
-                      <span>{room.bedType}</span>
+                      <span>{room.roomType}</span>
                     </div>
                     <div className="detail-item">
                       <span className="detail-icon">👥</span>
                       <span>Up to {room.capacity} guests</span>
                     </div>
-                    <div className="detail-item">
-                      <span className="detail-icon">🏢</span>
-                      <span>Floor {room.floor}</span>
-                    </div>
+                    {room.scenery && (
+                      <div className="detail-item">
+                        <span className="detail-icon">🌅</span>
+                        <span>{room.scenery}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="room-amenities">
-                    {room.amenities.slice(0, 4).map((amenity, index) => (
+                    {room.amenities && room.amenities.split(',').slice(0, 4).map((amenity, index) => (
                       <span key={index} className="amenity-tag">
-                        ✓ {amenity}
+                        ✓ {amenity.trim()}
                       </span>
                     ))}
-                    {room.amenities.length > 4 && (
-                      <span className="amenity-tag more">
-                        +{room.amenities.length - 4} more
-                      </span>
-                    )}
                   </div>
 
                   <div className="room-footer">

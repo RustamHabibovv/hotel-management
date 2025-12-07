@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../services/AuthContext';
+import reservationService from '../services/reservationService';
 import type { Room } from '../data/mockRooms';
 import '../styles/BookRoomForm.css';
 
@@ -16,6 +18,7 @@ interface BookingFormData {
 const BookRoomForm = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { room, checkIn, checkOut, guests } = location.state as { 
     room: Room; 
     checkIn: string; 
@@ -27,9 +30,9 @@ const BookRoomForm = () => {
     checkInDate: checkIn || '',
     checkOutDate: checkOut || '',
     numberOfGuests: guests || 1,
-    guestName: '',
-    guestEmail: '',
-    guestPhone: '',
+    guestName: user ? `${user.firstName} ${user.lastName}` : '',
+    guestEmail: user?.email || '',
+    guestPhone: user?.phone || '',
     specialRequests: '',
   });
 
@@ -121,10 +124,28 @@ const BookRoomForm = () => {
       return;
     }
 
+    if (!user) {
+      alert('Please log in to make a reservation');
+      navigate('/login');
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Prepare reservation data matching backend schema
+      const reservationData = {
+        check_in_date: formData.checkInDate,
+        number_of_guests: formData.numberOfGuests,
+        total_price: calculateTotal(),
+        duration: calculateNights(),
+        hour: 14, // Default check-in hour (2 PM)
+        room_id: room.id,
+      };
+
+      // Create reservation via API
+      await reservationService.createReservation(reservationData);
+      
       setIsSubmitting(false);
       
       // Show success message
@@ -132,7 +153,16 @@ const BookRoomForm = () => {
       
       // Navigate back to reservations
       navigate('/my-reservations');
-    }, 1500);
+    } catch (error: any) {
+      setIsSubmitting(false);
+      console.error('Error creating reservation:', error);
+      
+      const errorMessage = error.response?.data?.detail 
+        || error.response?.data?.error 
+        || 'Failed to create reservation. Please try again.';
+      
+      alert(`❌ Booking Failed\n\n${errorMessage}`);
+    }
   };
 
   const calculateNights = (): number => {
@@ -320,20 +350,18 @@ const BookRoomForm = () => {
             <h3 className="summary-title">📋 Booking Summary</h3>
 
             <div className="room-summary">
-              <img src={room.images[0]} alt={room.roomType} className="summary-image" />
+              <div className="summary-image" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                <div style={{ padding: '20px', color: 'white', textAlign: 'center' }}>Room {room.roomNumber}</div>
+              </div>
               <div className="room-info">
                 <h4>{room.roomType}</h4>
-                <p>Room {room.roomNumber} • Floor {room.floor}</p>
+                <p>Room {room.roomNumber}</p>
               </div>
             </div>
 
             <div className="summary-divider"></div>
 
             <div className="summary-details">
-              <div className="summary-row">
-                <span className="label">🛏️ Bed Type:</span>
-                <span className="value">{room.bedType}</span>
-              </div>
               <div className="summary-row">
                 <span className="label">👥 Capacity:</span>
                 <span className="value">Up to {room.capacity} guests</span>
