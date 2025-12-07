@@ -1,29 +1,60 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../styles/Auth.css';
+import { useAuth } from '../services/AuthContext';
+import { type User } from '../types/User';
 
 const Login = () => {
   const navigate = useNavigate();
+  const { setUser } = useAuth();
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    userType: 'guest' as 'guest' | 'staff' | 'admin'
+    userType: 'guest' as 'guest' | 'staff' | 'admin',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Connect to backend API for authentication
-    console.log('Login attempt:', formData);
-    
-    // Simulate successful login
-    alert(`Login successful as ${formData.userType}!`);
-    navigate('/');
+
+    // ✅ Map UI user types to system roles
+    const roleMap = {
+      guest: 'GUEST',
+      staff: 'WORKER',
+      admin: 'ADMIN',
+    } as const;
+
+    // ✅ Mock authenticated user (for frontend project)
+    const loggedInUser: User = {
+      id: Date.now().toString(),
+      username: formData.email.split('@')[0],
+      firstName:
+        formData.userType === 'admin'
+          ? 'Admin'
+          : formData.userType === 'staff'
+          ? 'Staff'
+          : 'Guest',
+      lastName: 'User',
+      email: formData.email,
+      role: roleMap[formData.userType],
+      password: formData.password, // demo only
+    };
+
+    // ✅ Save user in AuthContext
+    setUser(loggedInUser);
+
+    alert(`Login successful as ${loggedInUser.role}!`);
+
+    // ✅ Redirect to user management / profile
+    navigate('/users');
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 

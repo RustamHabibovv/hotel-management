@@ -1,0 +1,168 @@
+/* ===== USER MANAGEMENT PAGE ===== */
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem;
+}
+
+/* HEADER */
+.page h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+  color: #0f172a;
+}
+
+/* CREATE USER LINK */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.page-header a {
+  text-decoration: none;
+  font-weight: 600;
+  color: #4f46e5;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  background-color: #eef2ff;
+  transition: all 0.2s ease;
+}
+
+.page-header a:hover {
+  background-color: #e0e7ff;
+}
+
+/* SEARCH */
+.search-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.search-form input {
+  width: 260px;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  border: 1px solid #c7d2fe;
+}
+
+.search-form input:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.search-form button {
+  padding: 0.45rem 1rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: white;
+  background-color: #6366f1;
+}
+
+.search-form button:hover {
+  background-color: #4f46e5;
+}
+
+/* TABLE */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* HEADER */
+.table thead {
+  background-color: #f1f5f9;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1e293b;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ROWS */
+.table td {
+  padding: 0.7rem;
+  font-size: 0.9rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+/* ACTIONS */
+.table td:last-child {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+/* EDIT LINK */
+.table td a {
+  color: #2563eb;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.table td a:hover {
+  text-decoration: underline;
+}
+
+/* DELETE BUTTON */
+.table button {
+  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  background-color: #6366f1;
+  color: white;
+}
+
+.table button:hover {
+  background-color: #4f46e5;
+}
+
+/* ROLE BADGES */
+.role-badge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-block;
+}
+
+.role-admin {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+.role-guest {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.role-worker {
+  background-color: #dcfce7;
+  color: #166534;
+}
