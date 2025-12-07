@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import '../styles/Auth.css';
 import { useAuth } from '../services/AuthContext';
 import { type User } from '../types/User';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
 const Login = () => {
   const navigate = useNavigate();
   const { setUser } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const [formData, setFormData] = useState({
     email: '',
@@ -14,39 +19,59 @@ const Login = () => {
     userType: 'guest' as 'guest' | 'staff' | 'admin',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
 
-    // ✅ Map UI user types to system roles
-    const roleMap = {
-      guest: 'GUEST',
-      staff: 'WORKER',
-      admin: 'ADMIN',
-    } as const;
+    try {
+      // Call custom backend login endpoint (email and password)
+      const response = await axios.post(`${API_BASE_URL}/auth/custom-login/`, {
+        email: formData.email,
+        password: formData.password,
+      });
 
-    // ✅ Mock authenticated user (for frontend project)
-    const loggedInUser: User = {
-      id: Date.now().toString(),
-      username: formData.email.split('@')[0],
-      firstName:
-        formData.userType === 'admin'
-          ? 'Admin'
-          : formData.userType === 'staff'
-          ? 'Staff'
-          : 'Guest',
-      lastName: 'User',
-      email: formData.email,
-      role: roleMap[formData.userType],
-      password: formData.password, // demo only
-    };
+      const { access, refresh, user: backendUser } = response.data;
 
-    // ✅ Save user in AuthContext
-    setUser(loggedInUser);
+      // Store JWT tokens
+      localStorage.setItem('access_token', access);
+      localStorage.setItem('refresh_token', refresh);
 
-    alert(`Login successful as ${loggedInUser.role}!`);
+      // Use user data from backend
+      const loggedInUser: User = {
+        id: backendUser.id.toString(),
+        username: backendUser.email.split('@')[0],
+        firstName: backendUser.name,
+        lastName: backendUser.surname,
+        email: backendUser.email,
+        role: backendUser.role,
+        password: '', // Don't store password
+      };
 
-    // ✅ Redirect to user management / profile
-    navigate('/users');
+      // Save user in AuthContext
+      setUser(loggedInUser);
+
+      alert(`Login successful! Welcome ${loggedInUser.firstName} ${loggedInUser.lastName}!`);
+
+      // Redirect based on role
+      const userRole = backendUser.role?.toUpperCase();
+      if (userRole === 'GUEST' || userRole === 'guest') {
+        navigate('/my-reservations');
+      } else if (userRole === 'ADMIN' || userRole === 'admin') {
+        navigate('/users');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        'Login failed. Please check your credentials and try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (
@@ -118,8 +143,21 @@ const Login = () => {
             </Link>
           </div>
 
-          <button type="submit" className="btn-primary">
-            Sign In
+          {error && (
+            <div className="error-message" style={{ 
+              padding: '10px', 
+              marginBottom: '15px', 
+              backgroundColor: '#fee', 
+              border: '1px solid #fcc', 
+              borderRadius: '4px',
+              color: '#c00'
+            }}>
+              {error}
+            </div>
+          )}
+
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 

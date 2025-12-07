@@ -1,13 +1,42 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { mockReservations } from '../data/mockReservations';
+import reservationService from '../services/reservationService';
 import type { Reservation } from '../types';
 import '../styles/MyReservations.css';
 
 const MyReservations = () => {
   const navigate = useNavigate();
-  const [reservations] = useState<Reservation[]>(mockReservations);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch reservations on component mount and when filter changes
+  useEffect(() => {
+    fetchReservations();
+  }, [filterStatus]);
+
+  const fetchReservations = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await reservationService.getMyReservations(
+        filterStatus !== 'all' ? filterStatus : undefined,
+        '-check_in_date'
+      );
+      setReservations(data);
+    } catch (err: any) {
+      console.error('Error fetching reservations:', err);
+      setError(err.response?.data?.detail || 'Failed to load reservations. Please try again.');
+      
+      // If unauthorized, redirect to login
+      if (err.response?.status === 401) {
+        navigate('/login');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Calculate number of nights
   const calculateNights = (checkIn: string, checkOut: string): number => {
@@ -103,7 +132,22 @@ const MyReservations = () => {
         </div>
       </div>
 
-      {filteredReservations.length === 0 ? (
+      {loading ? (
+        <div className="loading-container">
+          <div className="loading-spinner">Loading reservations...</div>
+        </div>
+      ) : error ? (
+        <div className="error-container">
+          <div className="error-message">
+            <span className="error-icon">⚠️</span>
+            <h2>Error Loading Reservations</h2>
+            <p>{error}</p>
+            <button className="btn-primary" onClick={fetchReservations}>
+              Try Again
+            </button>
+          </div>
+        </div>
+      ) : filteredReservations.length === 0 ? (
         <div className="no-reservations">
           <div className="empty-state">
             <span className="empty-icon">🏨</span>
@@ -111,9 +155,9 @@ const MyReservations = () => {
             <p>You don't have any {filterStatus !== 'all' ? filterStatus : ''} reservations yet.</p>
             <button 
               className="btn-primary"
-              onClick={() => navigate('/rooms')}
+              onClick={() => navigate('/book-new-reservation')}
             >
-              Browse Available Rooms
+              Book Your First Room
             </button>
           </div>
         </div>
@@ -167,7 +211,7 @@ const MyReservations = () => {
                   <div className="detail-item">
                     <span className="detail-icon">💰</span>
                     <span className="detail-text price">
-                      ${reservation.totalPrice.toFixed(2)}
+                      ${reservation.totalPrice ? reservation.totalPrice.toFixed(2) : '0.00'}
                     </span>
                   </div>
                 </div>

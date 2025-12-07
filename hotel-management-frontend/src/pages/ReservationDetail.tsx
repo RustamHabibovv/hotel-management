@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { mockReservations } from '../data/mockReservations';
+import reservationService from '../services/reservationService';
 import type { Reservation } from '../types';
 import ModifyReservationModal from '../components/ModifyReservationModal';
 import '../styles/ReservationDetail.css';
@@ -10,22 +10,53 @@ const ReservationDetail = () => {
   const navigate = useNavigate();
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // TODO: Replace with actual API call
-    const found = mockReservations.find(r => r.id === Number(id));
-    if (found) {
-      setReservation(found);
-    } else {
-      // Redirect if reservation not found
-      navigate('/my-reservations');
-    }
-  }, [id, navigate]);
+    fetchReservationDetail();
+  }, [id]);
 
-  if (!reservation) {
+  const fetchReservationDetail = async () => {
+    if (!id) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await reservationService.getReservationById(Number(id));
+      setReservation(data);
+    } catch (err: any) {
+      console.error('Error fetching reservation:', err);
+      setError('Failed to load reservation details.');
+      
+      // If not found or unauthorized, redirect
+      if (err.response?.status === 404 || err.response?.status === 401) {
+        setTimeout(() => navigate('/my-reservations'), 2000);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
     return (
       <div className="loading-container">
-        <div className="loading-spinner">Loading...</div>
+        <div className="loading-spinner">Loading reservation details...</div>
+      </div>
+    );
+  }
+
+  if (error || !reservation) {
+    return (
+      <div className="error-container">
+        <div className="error-message">
+          <span className="error-icon">⚠️</span>
+          <h2>Error</h2>
+          <p>{error || 'Reservation not found'}</p>
+          <button className="btn-primary" onClick={() => navigate('/my-reservations')}>
+            Back to Reservations
+          </button>
+        </div>
       </div>
     );
   }
@@ -88,40 +119,59 @@ const ReservationDetail = () => {
   };
 
   const nights = calculateNights(reservation.checkInDate, reservation.checkOutDate);
-  const pricePerNight = reservation.roomDetails?.pricePerNight || 0;
+  const pricePerNight = Number(reservation.roomDetails?.pricePerNight) || 0;
 
   // Handle actions
   const handleModify = () => {
     setIsModifyModalOpen(true);
   };
 
-  const handleSaveModification = (updatedData: Partial<Reservation>) => {
-    if (reservation) {
-      const updatedReservation = {
-        ...reservation,
-        ...updatedData,
-        updatedAt: new Date().toISOString(),
-      };
-      setReservation(updatedReservation);
-      // TODO: Send update to backend API
+  const handleSaveModification = async (updatedData: Partial<Reservation>) => {
+    if (!reservation) return;
+    
+    try {
+      // Calculate duration from check-in and check-out dates
+      const duration = updatedData.checkOutDate && updatedData.checkInDate
+        ? calculateNights(updatedData.checkInDate, updatedData.checkOutDate)
+        : reservation.numberOfGuests;
+
+      const updatePayload: any = {};
+      
+      if (updatedData.checkInDate) {
+        updatePayload.check_in_date = updatedData.checkInDate;
+      }
+      if (updatedData.numberOfGuests) {
+        updatePayload.number_of_guests = updatedData.numberOfGuests;
+      }
+      if (updatedData.totalPrice) {
+        updatePayload.total_price = updatedData.totalPrice;
+      }
+      if (duration) {
+        updatePayload.duration = duration;
+      }
+
+      const updated = await reservationService.updateReservation(reservation.id, updatePayload);
+      setReservation(updated);
+      setIsModifyModalOpen(false);
+      alert('✅ Reservation updated successfully!');
+    } catch (err: any) {
+      console.error('Error updating reservation:', err);
+      alert('❌ Failed to update reservation: ' + (err.response?.data?.detail || err.message));
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
+    if (!reservation) return;
+    
     if (window.confirm('Are you sure you want to cancel this reservation? This action cannot be undone.')) {
-      // Update reservation status to cancelled
-      if (reservation) {
-        const cancelledReservation = {
-          ...reservation,
-          status: 'cancelled' as const,
-          updatedAt: new Date().toISOString(),
-        };
-        setReservation(cancelledReservation);
+      try {
+        const cancelled = await reservationService.cancelReservation(reservation.id);
+        setReservation(cancelled);
         
-        // Show success message
         alert('✅ Reservation Cancelled Successfully!\n\nYour reservation has been cancelled.\n\nCancellation Details:\n• Booking ID: #' + reservation.id + '\n• Room: ' + reservation.roomDetails?.roomNumber + ' - ' + reservation.roomDetails?.roomType + '\n\nA confirmation email has been sent to ' + reservation.guestEmail);
-        
-        // TODO: Send cancellation to backend API
+      } catch (err: any) {
+        console.error('Error cancelling reservation:', err);
+        alert('❌ Failed to cancel reservation: ' + (err.response?.data?.error || err.message));
       }
     }
   };

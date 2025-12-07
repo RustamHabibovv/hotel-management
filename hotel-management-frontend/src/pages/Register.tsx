@@ -1,9 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import '../styles/Auth.css';
+import { useAuth } from '../services/AuthContext';
+import { type User } from '../types/User';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 const Register = () => {
   const navigate = useNavigate();
+  const { setUser } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -15,8 +21,9 @@ const Register = () => {
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
@@ -35,12 +42,56 @@ const Register = () => {
       return;
     }
 
-    // TODO: Connect to backend API for registration
-    console.log('Registration attempt:', formData);
-    
-    // Simulate successful registration
-    alert(`Registration successful! Welcome ${formData.firstName}!`);
-    navigate('/login');
+    setLoading(true);
+
+    try {
+      // Call backend registration endpoint
+      const response = await axios.post(`${API_BASE_URL}/auth/register/`, {
+        email: formData.email,
+        password: formData.password,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        role: formData.userType,
+      });
+
+      const { access, refresh, user: backendUser } = response.data;
+
+      // Store JWT tokens
+      localStorage.setItem('access_token', access);
+      localStorage.setItem('refresh_token', refresh);
+
+      // Create user object for context
+      const loggedInUser: User = {
+        id: backendUser.id.toString(),
+        username: backendUser.email.split('@')[0],
+        firstName: backendUser.name,
+        lastName: backendUser.surname,
+        email: backendUser.email,
+        role: backendUser.role,
+        password: '',
+      };
+
+      setUser(loggedInUser);
+
+      alert(`Registration successful! Welcome ${formData.firstName}!`);
+      
+      // Redirect based on role
+      const userRole = backendUser.role?.toUpperCase();
+      if (userRole === 'GUEST' || userRole === 'guest') {
+        navigate('/my-reservations');
+      } else if (userRole === 'ADMIN' || userRole === 'admin') {
+        navigate('/users');
+      } else {
+        navigate('/dashboard');
+      }
+      
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      const errorMessage = err.response?.data?.error || 'Registration failed. Please try again.';
+      setErrors({ general: errorMessage });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -174,6 +225,19 @@ const Register = () => {
             </div>
           </div>
 
+          {errors.general && (
+            <div className="error-message" style={{ 
+              padding: '10px', 
+              marginBottom: '15px', 
+              backgroundColor: '#fee', 
+              border: '1px solid #fcc', 
+              borderRadius: '4px',
+              color: '#c00'
+            }}>
+              {errors.general}
+            </div>
+          )}
+
           <div className="form-group">
             <label className="checkbox-label">
               <input type="checkbox" required />
@@ -184,8 +248,8 @@ const Register = () => {
             </label>
           </div>
 
-          <button type="submit" className="btn-primary">
-            Create Account
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 
