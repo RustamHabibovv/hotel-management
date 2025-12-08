@@ -17,5 +17,5 @@ class PaymentViewSet(viewsets.ModelViewSet):
 def online_bank_payment(request):
     data = request.data
     # Send data to Postman mock API
-    res = requests.post('https://709b42ac-f533-4376-92cd-cbd192e2525e.mock.pstmn.io/payments', json=data)
+    res = requests.post('https://c5b3965f-34a1-4307-a466-f7b87f20cb7f.mock.pstmn.io/payments', json=data)
     return Response(res.json())    
