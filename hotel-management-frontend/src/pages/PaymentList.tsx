@@ -1,42 +1,80 @@
-import "../styles/PaymentManagement.css";
+import { useEffect, useState } from 'react';
+import axios from 'axios';
+import '../styles/PaymentManagement.css';
 
 interface Payment {
   id: number;
-  guest: string;
+  bill: number;
   amount: number;
-  method: string;
+  type: string;
   date: string;
+  state: boolean;
 }
 
-const dummyPayments: Payment[] = [
-  { id: 1, guest: "John Doe", amount: 250, method: "Credit Card", date: "2025-01-12" },
-  { id: 2, guest: "Sarah Kim", amount: 120, method: "Cash", date: "2025-01-15" }
-];
-
 const PaymentList = () => {
-  return (
-    <div className="page-container">
-      <h1>💳 All Payments</h1>
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
-      <table className="styled-table">
+  useEffect(() => {
+    axios.get('http://localhost:8000/api/payments/')
+      .then(res => setPayments(res.data.results || []))
+      .catch(err => console.error(err));
+  }, []);
+
+  const handleDelete = (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this payment?')) return;
+    axios.delete(`http://localhost:8000/api/payments/${id}/`)
+      .then(() => setPayments(payments.filter(p => p.id !== id)))
+      .catch(err => console.error(err));
+  };
+
+  const filteredPayments = payments.filter(p =>
+    p.bill.toString().includes(searchTerm) ||
+    p.id.toString().includes(searchTerm)
+  );
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h1>💳 Payments</h1>
+      </div>
+
+      <div className="search-form">
+        <input
+          type="text"
+          placeholder="Search by payment ID or bill ID..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+        />
+      </div>
+
+      <table className="table">
         <thead>
           <tr>
             <th>ID</th>
-            <th>Guest</th>
+            <th>Bill ID</th>
             <th>Amount</th>
-            <th>Method</th>
+            <th>Type</th>
             <th>Date</th>
+            <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
 
         <tbody>
-          {dummyPayments.map(payment => (
+          {filteredPayments.map(payment => (
             <tr key={payment.id}>
               <td>{payment.id}</td>
-              <td>{payment.guest}</td>
+              <td>{payment.bill}</td>
               <td>${payment.amount}</td>
-              <td>{payment.method}</td>
+              <td>{payment.type}</td>
               <td>{payment.date}</td>
+              <td className={payment.state ? 'status-paid' : 'status-unpaid'}>
+                {payment.state ? 'Paid' : 'Pending'}
+              </td>
+              <td>
+                <button className="table-btn delete" onClick={() => handleDelete(payment.id)}>Delete</button>
+              </td>
             </tr>
           ))}
         </tbody>

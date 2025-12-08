@@ -22,6 +22,7 @@ import PaymentStart from './pages/PaymentStart';
 import Bills from './pages/Bills';
 import BillEdit from './pages/BillEdit';
 import BillCreate from './pages/BillCreate';
+import BillView from './pages/BillView';
 import './App.css';
 import { AuthProvider } from './services/AuthContext';
 
@@ -60,6 +61,7 @@ function App() {
               <Route path="/payments/bills" element={<Bills />} />
               <Route path="/payments/bills/new" element={<BillCreate />} />
               <Route path="/payments/bills/:id" element={<BillEdit />} />
+              <Route path="/payments/bills/view/:id" element={<BillView />} />
             </Routes>
           </main>
         </div>
