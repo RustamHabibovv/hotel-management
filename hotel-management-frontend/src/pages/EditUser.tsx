@@ -1,53 +1,63 @@
-import { type FormEvent, useEffect, useState } from 'react';
-import { useNavigate, useParams, Navigate } from 'react-router-dom';
-import type { User } from '../types/User';
-import { allRoles, getUserById, updateUser } from '../services/userService';
-import { useAuth } from '../services/AuthContext';
+import { useEffect, useState, type FormEvent } from "react";
+import { useNavigate, useParams, Navigate } from "react-router-dom";
+import type { User } from "../types/User";
+import { getUser, updateUser, allRoles } from "../services/userService";
+import { useAuth } from "../services/AuthContext";
 
 const EditUser = () => {
   const { id } = useParams<{ id: string }>();
-  const { isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
 
   const [user, setUser] = useState<User | null>(null);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  if (!isAdmin) {
-    return <Navigate to="/users" replace />;
-  }
+  // Only admins can edit users
+  if (!isAdmin) return <Navigate to="/users" replace />;
 
+  // Load user
   useEffect(() => {
-    const load = async () => {
+    const loadUser = async () => {
       setLoading(true);
-      const found = id ? await getUserById(id) : undefined;
-      if (!found) {
-        setError('User not found');
-      } else {
+
+      try {
+        if (!id) {
+          setError("Invalid user ID");
+          return;
+        }
+
+        const found = await getUser(Number(id));
         setUser(found);
+      } catch (err) {
+        setError("User not found");
       }
+
       setLoading(false);
     };
-    load();
+
+    loadUser();
   }, [id]);
 
+  // Handle form changes
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     if (!user) return;
-    const { name, value } = e.target;
-    setUser({ ...user, [name]: value });
+    setUser({ ...user, [e.target.name]: e.target.value });
   };
 
+  // Submit update
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    setError('');
+
     try {
-      await updateUser(user);
-      navigate('/users');
+      await updateUser(user.id, user);
+      navigate("/users");
     } catch (err) {
-      setError('Failed to update user');
+      console.error(err);
+      setError("Failed to update user");
     }
   };
 
@@ -57,16 +67,8 @@ const EditUser = () => {
   return (
     <div className="page">
       <h1>Edit User</h1>
+
       <form className="card" onSubmit={handleSubmit}>
-        <div className="form-row">
-          <label>Username</label>
-          <input
-            name="username"
-            value={user.username}
-            onChange={handleChange}
-            required
-          />
-        </div>
         <div className="form-row">
           <label>First Name</label>
           <input
@@ -76,6 +78,7 @@ const EditUser = () => {
             required
           />
         </div>
+
         <div className="form-row">
           <label>Last Name</label>
           <input
@@ -85,6 +88,7 @@ const EditUser = () => {
             required
           />
         </div>
+
         <div className="form-row">
           <label>Email</label>
           <input
@@ -95,9 +99,24 @@ const EditUser = () => {
             required
           />
         </div>
+
+        <div className="form-row">
+          <label>Payment Method</label>
+          <input
+            name="registered_payment_method"
+            value={user.registered_payment_method || ""}
+            onChange={handleChange}
+            placeholder="Optional"
+          />
+        </div>
+
         <div className="form-row">
           <label>Role</label>
-          <select name="role" value={user.role} onChange={handleChange}>
+          <select
+            name="role"
+            value={user.role}
+            onChange={handleChange}
+          >
             {allRoles.map((r) => (
               <option key={r} value={r}>
                 {r}
@@ -109,7 +128,9 @@ const EditUser = () => {
         {error && <p className="error-text">{error}</p>}
 
         <div className="form-actions">
-          <button type="submit">Save Changes</button>
+          <button type="submit" className="btn-primary">
+            Save Changes
+          </button>
         </div>
       </form>
     </div>

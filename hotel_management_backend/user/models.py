@@ -30,6 +30,14 @@ class User(models.Model):
         Always return False. This is a way to tell if the user is anonymous.
         """
         return False
+    @property
+    def is_staff(self):
+        return self.role == "ADMIN"
+
+@property
+def is_superuser(self):
+    return self.role == "ADMIN"
+
 
 class UserHistory(models.Model):
     date_of_registration = models.DateField()
