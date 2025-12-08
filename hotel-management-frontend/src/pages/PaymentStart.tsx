@@ -41,6 +41,30 @@ const PaymentStart = () => {
     .catch(err => console.error(err));
   };
 
+  const handleOnlineBanking = () => {
+    if (!selectedBill) return alert('Select a bill!');
+    
+    axios.post('http://localhost:8000/api/online-bank-payments/', {
+
+      bill: selectedBill.id,
+       amount,
+       type: 'bank',
+       date: new Date().toISOString().split('T')[0]
+     })
+     .then(res => {
+       alert(`Bank payment successful! Transaction ID: ${res.data.transaction_id}`);
+       // Mark bill as paid
+       axios.patch(`http://localhost:8000/api/bills/${selectedBill.id}/`, { status: 'Paid' })
+         .then(() => setSelectedBill(null))
+         .catch(err => console.error(err));
+     })
+     .catch((err) => {
+        console.error(err);
+        alert('Bank payment failed');
+});
+
+  } ;
+
   return (
     <div className="page">
       <div className="page-header">
@@ -75,35 +99,31 @@ const PaymentStart = () => {
 
 
       {selectedBill && (
-        <div>
-          <button className="submit-btn" style={{ marginBottom: '1rem' }} onClick={() => setSelectedBill(null)}>
-            Cancel
-          </button>
+        <form className="payment-form" onSubmit={e => { e.preventDefault(); handlePayment(); }}>
+          <h3>Selected Bill #{selectedBill.id} - Room {selectedBill.room}</h3>
 
-          <form className="payment-form" onSubmit={e => { e.preventDefault(); handlePayment(); }}>
-            <h3>Selected Bill #{selectedBill.id}</h3>
+          <label>Payment Method</label>
+          <select className="input-field" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="bank">Online Banking</option>
+          </select>
 
-            <label>Payment Method</label>
-            <select className="input-field" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
-              <option value="cash">Cash</option>
-              <option value="card">Card</option>
-              <option value="bank">Online Banking</option>
-            </select>
+          <label>Amount</label>
+          <input className="input-field" type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} />
 
-            <label>Amount</label>
-            <input className="input-field" type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} />
+          {paymentMethod === 'bank' && (
+            <button type="button" className="submit-btn" onClick={handleOnlineBanking}>
+              Connect to Bank
+            </button>
+          )}
 
-            <button className="submit-btn" type="submit">Submit Payment</button>
-
-            {paymentMethod === 'bank' && (
-              <button type="button" className="submit-btn" style={{ marginTop: '1rem', backgroundColor: '#10b981' }}
-                onClick={() => alert('Connecting to bank API...')}>
-                Connect to Bank
-              </button>
-            )}
+          {paymentMethod !== 'bank' && (
+            <button type="submit" className="submit-btn">Submit Payment</button>
+          )}
         </form>
-      </div>
-    )}
+      )}
+
 
     </div>
   );
