@@ -1,112 +1,128 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import type { User } from '../../types/User';
-import { deleteUser, searchUsers } from '../../services/userService';
-import { useAuth } from '../../services/AuthContext';
-import '../../styles/UserManagement.css';
+import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import type { User } from "../../types/User";
+import { deleteUser, getUsers } from "../../services/userService";
+import { useAuth } from "../../services/AuthContext";
+import "../../styles/UserManagement.css";
 
 const AdminUserManagement = () => {
   const { user: currentUser } = useAuth();
-  const [query, setQuery] = useState('');
+
+  const [query, setQuery] = useState("");
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
+  // Load and apply frontend search
   const load = async () => {
     setLoading(true);
-    setError('');
+    setError("");
+
     try {
-      const list = await searchUsers(query);
-      setUsers(list);
+      const list = await getUsers();
+
+      // Filter here (backend does not support searching)
+      const q = query.toLowerCase();
+      const filtered = list.filter(
+        (u) =>
+          u.firstName.toLowerCase().includes(q) ||
+          u.lastName.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          u.role.toLowerCase().includes(q)
+      );
+
+      setUsers(filtered);
     } catch (err) {
-      setError('Failed to load users');
-    } finally {
-      setLoading(false);
+      console.error(err);
+      setError("Failed to load users");
     }
+
+    setLoading(false);
   };
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Only load once on page open
 
   const handleSearch = async (e: FormEvent) => {
     e.preventDefault();
     await load();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this user?')) return;
-    if (currentUser && currentUser.id === id) {
-      alert('You cannot delete yourself.');
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("Delete this user?")) return;
+
+    // Prevent deleting yourself
+    if (currentUser && Number(currentUser.id) === Number(id)) {
+      alert("You cannot delete yourself.");
       return;
     }
-    await deleteUser(id);
-    await load();
+
+    try {
+      await deleteUser(id);
+      await load();
+    } catch (err) {
+      alert("Failed to delete user.");
+    }
   };
 
+  return (
+    <div className="page">
+      {/* HEADER */}
+      <div className="page-header">
+        <h1>User Management (Admin)</h1>
+        <Link to="/users/new">+ Create User</Link>
+      </div>
 
-return (
-  <div className="page">
-    {/* HEADER */}
-    <div className="page-header">
-      <h1>User Management (Admin)</h1>
-      <Link to="/users/new">+ Create User</Link>
-    </div>
+      {/* SEARCH BAR */}
+      <form className="search-form" onSubmit={handleSearch}>
+        <input
+          placeholder="Search by name or email..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <button type="submit">Search</button>
+      </form>
 
-    {/* SEARCH */}
-    <form className="search-form" onSubmit={handleSearch}>
-      <input
-        placeholder="Search by name, username, email..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      <button type="submit">Search</button>
-    </form>
+      {error && <div className="error-text">{error}</div>}
 
-    {/* TABLE */}
-    <table className="table">
-      <thead>
-        <tr>
-          <th>Username</th>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Role</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {users.map((u) => (
-          <tr key={u.id}>
-            <td>{u.username}</td>
-            <td>
-              {u.firstName} {u.lastName}
-            </td>
-            <td>{u.email}</td>
-            <td>
-              <span
-                className={`role-badge role-${u.role.toLowerCase()}`}
-              >
-                {u.role}
-              </span>
-            </td>
-           <td>
-  <Link to={`/users/${u.id}/edit`}>Edit</Link>
-  <button
-    type="button"
-    onClick={() => handleDelete(u.id)}
-  >
-    Delete
-  </button>
-</td>
-
+      {/* TABLE */}
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Payment Method</th>
+            <th>Role</th>
+            <th>Actions</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+        </thead>
+
+        <tbody>
+          {users.map((u) => (
+            <tr key={u.id}>
+              <td>
+                {u.firstName} {u.lastName}
+              </td>
+              <td>{u.email}</td>
+              <td>{u.registered_payment_method || "-"}</td>
+              <td>
+                <span className={`role-badge role-${u.role.toLowerCase()}`}>
+                  {u.role}
+                </span>
+              </td>
+              <td>
+                <Link to={`/users/${u.id}/edit`}>Edit</Link>{" "}
+                <button type="button" onClick={() => handleDelete(u.id)}>
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 };
 
 export default AdminUserManagement;

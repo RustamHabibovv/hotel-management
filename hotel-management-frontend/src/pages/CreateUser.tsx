@@ -1,159 +1,142 @@
-import { type FormEvent, useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
-import { allRoles, createUser } from '../services/userService';
-import { useAuth } from '../services/AuthContext';
-import '../styles/UserForm.css';
-import type { UserRole } from '../types/User';
-
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { createUser, allRoles } from "../services/userService";
+import "../styles/UserManagement.css";
 
 const CreateUser = () => {
-  const { isAdmin } = useAuth();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState<{
-  username: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: UserRole;
-  password: string;
-}>({
-  username: '',
-  firstName: '',
-  lastName: '',
-  email: '',
-  role: 'GUEST',
-  password: '',
-});
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    registered_payment_method: "",
+    role: "GUEST",
+    password: "",
+    confirmPassword: "",
+  });
 
-  const [error, setError] = useState('');
-
-  if (!isAdmin) {
-    return <Navigate to="/users" replace />;
-  }
+  const [error, setError] = useState("");
 
   const handleChange = (
-  e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-) => {
-  const { name, value } = e.target;
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
-  setForm((prev) => ({
-    ...prev,
-    [name]:
-      name === 'role' ? (value as UserRole) : value,
-  }));
-};
-
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
+
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
 
     try {
       await createUser(form);
-      navigate('/users');
-    } catch {
-      setError('Failed to create user');
+      navigate("/users"); // back to admin list page
+    } catch (err) {
+      console.error(err);
+      setError("Failed to create user");
     }
   };
 
   return (
-    <div className="user-form-page">
+    <div className="page">
       <h1>Create User</h1>
 
-      <div className="user-form-card">
-        <form onSubmit={handleSubmit}>
-          <div className="user-form-grid">
-            <div className="form-field">
-              <label htmlFor="username">Username</label>
-              <input
-                id="username"
-                name="username"
-                value={form.username}
-                onChange={handleChange}
-                required
-              />
-            </div>
+      <form className="card" onSubmit={handleSubmit}>
+        <div className="form-row">
+          <label>First Name</label>
+          <input
+            name="firstName"
+            value={form.firstName}
+            onChange={handleChange}
+            required
+          />
+        </div>
 
-            <div className="form-field">
-              <label htmlFor="email">Email</label>
-              <input
-                id="email"
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                required
-              />
-            </div>
+        <div className="form-row">
+          <label>Last Name</label>
+          <input
+            name="lastName"
+            value={form.lastName}
+            onChange={handleChange}
+            required
+          />
+        </div>
 
-            <div className="form-field">
-              <label htmlFor="firstName">First Name</label>
-              <input
-                id="firstName"
-                name="firstName"
-                value={form.firstName}
-                onChange={handleChange}
-                required
-              />
-            </div>
+        <div className="form-row">
+          <label>Email</label>
+          <input
+            name="email"
+            type="email"
+            value={form.email}
+            onChange={handleChange}
+            required
+          />
+        </div>
 
-            <div className="form-field">
-              <label htmlFor="lastName">Last Name</label>
-              <input
-                id="lastName"
-                name="lastName"
-                value={form.lastName}
-                onChange={handleChange}
-                required
-              />
-            </div>
+        <div className="form-row">
+          <label>Payment Method</label>
+          <input
+            name="registered_payment_method"
+            value={form.registered_payment_method}
+            onChange={handleChange}
+            placeholder="Optional"
+          />
+        </div>
 
-            <div className="form-field">
-              <label htmlFor="role">Role</label>
-              <select
-                id="role"
-                name="role"
-                value={form.role}
-                onChange={handleChange}
-              >
-                {allRoles.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="form-row">
+          <label>Role</label>
+          <select name="role" value={form.role} onChange={handleChange}>
+            {allRoles.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </div>
 
-            <div className="form-field">
-              <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                name="password"
-                value={form.password}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          </div>
+        {/* ---- NEW PASSWORD FIELDS ---- */}
+        <div className="form-row">
+          <label>Password</label>
+          <input
+            name="password"
+            type="password"
+            value={form.password}
+            onChange={handleChange}
+            required
+          />
+        </div>
 
-          {error && <p className="form-error">{error}</p>}
+        <div className="form-row">
+          <label>Confirm Password</label>
+          <input
+            name="confirmPassword"
+            type="password"
+            value={form.confirmPassword}
+            onChange={handleChange}
+            required
+          />
+        </div>
 
-          <div className="form-actions">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => navigate('/users')}
-            >
-              Cancel
-            </button>
+        {error && <p className="error-text">{error}</p>}
 
-            <button type="submit" className="btn-primary">
-              Create User
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="form-actions">
+          <button type="submit" className="btn-primary">
+            Create User
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => navigate("/users")}
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
     </div>
   );
 };

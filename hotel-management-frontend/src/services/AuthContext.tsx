@@ -1,70 +1,117 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect
-} from 'react';
-import { useState } from "react";
-import type { ReactNode } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import type { User } from "../types/User";
 
-import type { User } from '../types/User';
-import { loginWithCredentials } from './userService';
-
-interface AuthContextValue {
+interface AuthContextType {
   user: User | null;
+  loading: boolean;
   isAdmin: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  setUser: (user: User | null) => void; // for profile updates
+  setUser: (u: User | null) => void;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const CURRENT_USER_KEY = 'hm_current_user';
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUserState] = useState<User | null>(null);
+const API_LOGIN = "http://localhost:8000/api/auth/custom-login/";
+const API_ME = "http://localhost:8000/api/auth/me/";
 
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const isAdmin = user?.role === "ADMIN";
+
+  // ----------------------------------------------------------
+  // Load current user from saved token (on page refresh)
+  // ----------------------------------------------------------
   useEffect(() => {
-    const raw = localStorage.getItem(CURRENT_USER_KEY);
-    if (raw) {
-      setUserState(JSON.parse(raw));
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setLoading(false);
+      return;
     }
+
+    fetch(API_ME, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Token invalid");
+        return res.json();
+      })
+      .then((data) => {
+        // backend returns: { id, name, surname, email, role }
+        const mappedUser: User = {
+  id: data.user.id,
+  firstName: data.user.name,
+  lastName: data.user.surname,
+  email: data.user.email,
+  registered_payment_method: data.user.registered_payment_method ?? "",
+  role: data.user.role,
+};
+
+        setUser(mappedUser);
+      })
+      .catch(() => {
+        localStorage.removeItem("access_token");
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  const setUser = (u: User | null) => {
-    setUserState(u);
-    if (u) {
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(u));
-    } else {
-      localStorage.removeItem(CURRENT_USER_KEY);
+  // ----------------------------------------------------------
+  // LOGIN: POST /api/auth/custom-login/
+  // ----------------------------------------------------------
+  const login = async (email: string, password: string) => {
+    const res = await fetch(API_LOGIN, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!res.ok) {
+      throw new Error("Invalid email or password");
     }
+
+    const data = await res.json();
+    // data.user = { id, name, surname, email, role }
+
+    const mappedUser: User = {
+      id: data.user.id,
+      firstName: data.user.name,
+      lastName: data.user.surname,
+      email: data.user.email,
+      registered_payment_method:
+        data.user.registered_payment_method ?? undefined,
+      role: data.user.role,
+    };
+
+    localStorage.setItem("access_token", data.access);
+    setUser(mappedUser);
   };
 
-  const login = async (username: string, password: string) => {
-    const found = await loginWithCredentials(username, password);
-    if (found) {
-      setUser(found);
-      return true;
-    }
-    return false;
-  };
-
-  const logout = () => setUser(null);
-
-  const value: AuthContextValue = {
-    user,
-    isAdmin: user?.role === 'ADMIN',
-    login,
-    logout,
-    setUser,
+  // ----------------------------------------------------------
+  // LOGOUT
+  // ----------------------------------------------------------
+  const logout = () => {
+    localStorage.removeItem("access_token");
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+    <AuthContext.Provider
+      value={{ user, loading, isAdmin, login, logout, setUser }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
 };
 
-export const useAuth = (): AuthContextValue => {
+export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
   return ctx;
 };

@@ -1,116 +1,184 @@
-import type { User, UserRole } from '../types/User';
+import type { User, UserRole } from "../types/User";
 
-const USERS_KEY = 'hm_users';
+const BASE_URL = "http://localhost:8000/api/users/";
 
-function seedUsersIfNeeded() {
-  const existing = localStorage.getItem(USERS_KEY);
-  if (existing) return;
-
-  const seed: User[] = [
-    {
-      id: '1',
-      username: 'admin',
-      firstName: 'System',
-      lastName: 'Admin',
-      email: 'admin@hotel.com',
-      role: 'ADMIN',
-      password: 'admin123',
-    },
-    {
-      id: '2',
-      username: 'john',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john@example.com',
-      role: 'GUEST',
-      password: 'john123',
-    },
-  ];
-
-  localStorage.setItem(USERS_KEY, JSON.stringify(seed));
-}
-
-function getAllFromStorage(): User[] {
-  seedUsersIfNeeded();
-  const raw = localStorage.getItem(USERS_KEY);
-  return raw ? (JSON.parse(raw) as User[]) : [];
-}
-
-function saveAllToStorage(users: User[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-export async function getUsers(): Promise<User[]> {
-  return getAllFromStorage();
-}
-
-export async function searchUsers(query: string): Promise<User[]> {
-  const users = getAllFromStorage();
-  if (!query.trim()) return users;
-
-  const q = query.toLowerCase();
-  return users.filter(
-    (u) =>
-      u.username.toLowerCase().includes(q) ||
-      u.firstName.toLowerCase().includes(q) ||
-      u.lastName.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q) ||
-      u.role.toLowerCase().includes(q)
-  );
-}
-
-export async function getUserById(id: string): Promise<User | undefined> {
-  const users = getAllFromStorage();
-  return users.find((u) => u.id === id);
-}
-
-export async function createUser(
-  data: Omit<User, 'id'>
-): Promise<User> {
-  const users = getAllFromStorage();
-  const newUser: User = {
-    ...data,
-    id: (Date.now() + Math.random()).toString(),
+// ----------------------------
+// SAFE TOKEN HEADER BUILDER
+// ----------------------------
+function mapUser(raw: any): User {
+  return {
+    id: raw.id,
+    firstName: raw.firstName ?? raw.name ?? "",
+    lastName: raw.lastName ?? raw.surname ?? "",
+    email: raw.email ?? raw.email_address ?? "",
+    registered_payment_method: raw.registered_payment_method ?? "",
+    role: raw.role ?? "GUEST",
   };
-  users.push(newUser);
-  saveAllToStorage(users);
-  return newUser;
 }
 
-export async function updateUser(updated: User): Promise<User> {
-  const users = getAllFromStorage();
-  const idx = users.findIndex((u) => u.id === updated.id);
-  if (idx === -1) throw new Error('User not found');
-  users[idx] = updated;
-  saveAllToStorage(users);
-  return updated;
+function buildHeaders(contentType = false): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  if (contentType) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const token = localStorage.getItem("access_token"); // FIX HERE
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return headers;
 }
 
-export async function deleteUser(id: string): Promise<void> {
-  const users = getAllFromStorage().filter((u) => u.id !== id);
-  saveAllToStorage(users);
+
+// ----------------------------
+// GET ALL USERS (ADMIN)
+// ----------------------------
+export async function getUsers(): Promise<User[]> {
+  const res = await fetch(BASE_URL, {
+    headers: buildHeaders(true),
+  });
+
+  const data = await res.json();
+  console.log("GET /users response:", res.status, data); // debug
+
+  // If the request itself failed (401, 403, 500, etc.)
+  if (!res.ok) {
+    throw new Error(`Failed to load users, status ${res.status}`);
+  }
+
+  // DRF WITHOUT pagination -> plain array
+  if (Array.isArray(data)) {
+    return data.map(mapUser);
+  }
+
+  // DRF WITH pagination -> { count, next, previous, results: [...] }
+  if (Array.isArray((data as any).results)) {
+    return (data as any).results.map(mapUser);
+  }
+
+  // Anything else is unexpected -> avoid .filter crash
+  console.error("Unexpected /users/ payload shape:", data);
+  return [];
 }
 
-export async function loginWithCredentials(
-  username: string,
-  password: string
-): Promise<User | null> {
-  const users = getAllFromStorage();
-  const found = users.find(
-    (u) => u.username === username && u.password === password
-  );
-  return found ?? null;
+
+// ----------------------------
+// GET USER BY ID
+// ----------------------------
+export async function getUser(id: number): Promise<User> {
+  const res = await fetch(`${BASE_URL}${id}/`, {
+    headers: buildHeaders(true),
+  });
+
+  if (!res.ok) throw new Error("Failed to load user");
+  return res.json();
 }
 
+// ----------------------------
+// CREATE USER (ADMIN)
+export async function createUser(data: any): Promise<User> {
+  const payload = {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email,
+    registered_payment_method: data.registered_payment_method || "",
+    role: data.role,
+    password: data.password,   // <--- IMPORTANT
+  };
+
+  const res = await fetch(BASE_URL, {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) throw new Error("Failed to create user");
+  return res.json();
+}
+
+
+// ----------------------------
+// UPDATE USER (ADMIN)
+// ----------------------------
+export async function updateUser(id: number, data: any): Promise<User> {
+  const payload = {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email,
+    registered_payment_method: data.registered_payment_method || "",
+    role: data.role,
+  };
+
+  const res = await fetch(`${BASE_URL}${id}/`, {
+    method: "PUT",
+    headers: buildHeaders(true),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) throw new Error("Failed to update user");
+  return res.json();
+}
+
+// ----------------------------
+// DELETE USER (ADMIN)
+// ----------------------------
+export async function deleteUser(id: number): Promise<void> {
+  const res = await fetch(`${BASE_URL}${id}/`, {
+    method: "DELETE",
+    headers: buildHeaders(),
+  });
+
+  if (!res.ok) throw new Error("Failed to delete user");
+}
+
+// ----------------------------
+// UPDATE PROFILE (GUEST)
+// ----------------------------
+export async function updateProfile(id: number, data: any): Promise<User> {
+  const payload = {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email,
+    registered_payment_method: data.registered_payment_method || "",
+  };
+
+  const res = await fetch(`${BASE_URL}${id}/update-profile/`, {
+    method: "PUT",
+    headers: buildHeaders(true),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) throw new Error("Failed to update profile");
+  return res.json();
+}
+
+// ----------------------------
+// CHANGE PASSWORD (GUEST)
+// ----------------------------
 export async function updatePassword(
-  userId: string,
+  id: number,
+  oldPassword: string,
   newPassword: string
-): Promise<void> {
-  const users = getAllFromStorage();
-  const idx = users.findIndex((u) => u.id === userId);
-  if (idx === -1) throw new Error('User not found');
-  users[idx].password = newPassword;
-  saveAllToStorage(users);
+): Promise<{ detail: string }> {
+  const payload = {
+    old_password: oldPassword,
+    new_password: newPassword,
+  };
+
+  const res = await fetch(`${BASE_URL}${id}/change-password/`, {
+    method: "PUT",
+    headers: buildHeaders(true),
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) throw new Error("Failed to change password");
+  return res.json();
 }
 
-export const allRoles: UserRole[] = ['ADMIN', 'GUEST', 'WORKER'];
+
+// ----------------------------
+// ROLES AVAILABLE
+// ----------------------------
+export const allRoles: UserRole[] = ["ADMIN", "GUEST", "WORKER"];
