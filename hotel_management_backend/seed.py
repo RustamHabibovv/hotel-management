@@ -6,7 +6,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'hotel_management_backend.settin
 django.setup()
 
 from hotel.models import Hotel
-from worker.models import Worker
+from worker.models import Worker, Task
 from user.models import User, UserHistory
 from reservation.models import Reservation
 from room.models import Room, ReservationRoom, SpecialRoomRequest
@@ -116,5 +116,17 @@ Payment.objects.create(
     state=True
 )
 print("✔ Created Payment")
+
+# 11. TASKS
+Task.objects.create(
+    name="Clean room 101",
+    upload_date="2025-01-08",
+    completion_date=None,
+    reserved=False,
+    staff_assigned="Carol Williams",
+    worker=worker
+)
+print("✔ Created Task")
+
 
 print("\n🎉 Database seeding completed successfully!")

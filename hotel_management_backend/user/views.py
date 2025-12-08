@@ -5,6 +5,8 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import date
 from .models import User, UserHistory
+from worker.models import Worker
+from hotel.models import Hotel
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -66,6 +68,7 @@ def custom_login(request):
                 'surname': user.surname,
                 'email': user.email_address,
                 'role': user.role or 'GUEST',
+                'worker_id': worker_id, 
             }
         })
     
@@ -88,7 +91,10 @@ def register(request):
         "password": "password123",
         "first_name": "John",
         "last_name": "Doe",
-        "role": "guest"  # Optional: guest, staff, admin
+        "role": "guest",  # Optional: guest, staff, admin
+        "hotel_id": 1,    # Required if role is "staff"
+        "contracts": "CDI",  # Optional for staff
+        "jobs": "Receptionist"  # Optional for staff
     }
     """
     email = request.data.get('email')
@@ -96,6 +102,11 @@ def register(request):
     first_name = request.data.get('first_name') or request.data.get('firstName')
     last_name = request.data.get('last_name') or request.data.get('lastName')
     role = request.data.get('role', 'guest').upper()
+    
+    # Additional fields for STAFF
+    hotel_id = request.data.get('hotel_id')
+    contracts = request.data.get('contracts')
+    jobs = request.data.get('jobs')
     
     # Validation
     if not email:
@@ -116,6 +127,23 @@ def register(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
+    # Validate hotel_id for STAFF
+    if role == "STAFF":
+        if not hotel_id:
+            return Response(
+                {'error': 'Hotel is required for staff registration'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if hotel exists
+        try:
+            hotel = Hotel.objects.get(id=hotel_id)
+        except Hotel.DoesNotExist:
+            return Response(
+                {'error': 'Invalid hotel ID'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
     # Check if email already exists
     if User.objects.filter(email_address=email).exists():
         return Response(
@@ -133,7 +161,21 @@ def register(request):
         )
         user.set_password(password)
         user.save()
-        
+        worker_id = None
+        # Create Worker if role is STAFF
+        if role.upper() == "STAFF":
+            # Refresh user instance from database
+            user.refresh_from_db()
+            worker = Worker.objects.create(
+                user=user,
+                name=user.name,
+                surname=user.surname,
+                contact_info=user.email_address,
+                hotel=hotel,
+                contracts=contracts,
+                jobs=jobs
+            )
+            worker_id = worker.id 
         # Create user history
         UserHistory.objects.create(
             user=user,
@@ -157,6 +199,7 @@ def register(request):
                 'surname': user.surname,
                 'email': user.email_address,
                 'role': user.role,
+                'worker_id': worker_id, 
             }
         }, status=status.HTTP_201_CREATED)
         
@@ -169,19 +212,21 @@ def register(request):
 
 @api_view(['GET'])
 def get_current_user(request):
-    """
-    Get current logged-in user from JWT token.
-    
-    GET /api/auth/me/
-    """
-    # request.user is now our custom User object thanks to CustomJWTAuthentication
     user = request.user
     
-    # If authentication passed, we have a valid user
+    worker_id = None
+    if user.role == 'STAFF':
+        try:
+            worker = Worker.objects.get(user=user)
+            worker_id = worker.id
+        except Worker.DoesNotExist:
+            pass
+    
     return Response({
         'id': user.id,
         'name': user.name,
         'surname': user.surname,
         'email': user.email_address,
         'role': user.role or 'GUEST',
+        'worker_id': worker_id, 
     })

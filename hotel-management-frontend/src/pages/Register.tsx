@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import '../styles/Auth.css';
@@ -17,7 +17,11 @@ const Register = () => {
     phone: '',
     password: '',
     confirmPassword: '',
-    userType: 'guest' as 'guest' | 'staff' | 'admin'
+    userType: 'guest' as 'guest' | 'staff' | 'admin',
+    // Additional fields for STAFF
+    hotelId: '1', // Default hotel ID
+    contracts: '',
+    jobs: ''
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -37,6 +41,11 @@ const Register = () => {
       newErrors.password = 'Password must be at least 6 characters';
     }
 
+    // Validation for STAFF
+    if (formData.userType === 'staff' && !formData.hotelId) {
+      newErrors.hotelId = 'Please select a hotel';
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -45,21 +54,37 @@ const Register = () => {
     setLoading(true);
 
     try {
-      // Call backend registration endpoint
-      const response = await axios.post(`${API_BASE_URL}/auth/register/`, {
+      // Prepare data to send
+      const registrationData: any = {
         email: formData.email,
         password: formData.password,
         first_name: formData.firstName,
         last_name: formData.lastName,
         role: formData.userType,
-      });
+      };
 
+      // Add additional fields if STAFF
+      if (formData.userType === 'staff') {
+        registrationData.hotel_id = parseInt(formData.hotelId);
+        if (formData.contracts) registrationData.contracts = formData.contracts;
+        if (formData.jobs) registrationData.jobs = formData.jobs;
+      }
+
+      // Call backend registration endpoint
+      const response = await axios.post(`${API_BASE_URL}/auth/register/`, registrationData);
+      console.log('REGISTER RESPONSE:', response.data);
       const { access, refresh, user: backendUser } = response.data;
 
       // Store JWT tokens
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
 
+
+      const workerIdFromBackend =
+      backendUser?.worker_id ??
+      (backendUser?.worker && (backendUser.worker.id ?? backendUser.worker_id)) ??
+      null;
+      
       // Create user object for context
       const loggedInUser: User = {
         id: backendUser.id.toString(),
@@ -69,6 +94,7 @@ const Register = () => {
         email: backendUser.email,
         role: backendUser.role,
         password: '',
+        worker_id: workerIdFromBackend, 
       };
 
       setUser(loggedInUser);
@@ -95,15 +121,18 @@ const Register = () => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
+    
     // Clear error for this field
-    if (errors[e.target.name]) {
+    if (errors[name]) {
       setErrors({
         ...errors,
-        [e.target.name]: ''
+        [name]: ''
       });
     }
   };
@@ -190,6 +219,51 @@ const Register = () => {
               required
             />
           </div>
+
+          {/* Additional fields for STAFF */}
+          {formData.userType === 'staff' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="hotelId">Hotel</label>
+                <input
+                  type="text"
+                  id="hotelId"
+                  name="hotelId"
+                  value={formData.hotelId}
+                  onChange={handleChange}
+                  placeholder="1"
+                  required
+                />
+                <small className="form-hint">Default hotel ID</small>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="contracts">Contract Type</label>
+                <input
+                  type="text"
+                  id="contracts"
+                  name="contracts"
+                  value={formData.contracts}
+                  onChange={handleChange}
+                  placeholder="e.g., Full-time, Part-time, Contract"
+                />
+                <small className="form-hint">Optional: Specify your employment contract type</small>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="jobs">Job Position</label>
+                <input
+                  type="text"
+                  id="jobs"
+                  name="jobs"
+                  value={formData.jobs}
+                  onChange={handleChange}
+                  placeholder="e.g., Receptionist, Manager, Housekeeper"
+                />
+                <small className="form-hint">Optional: Specify your job position</small>
+              </div>
+            </>
+          )}
 
           <div className="form-row">
             <div className="form-group">

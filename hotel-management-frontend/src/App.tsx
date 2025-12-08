@@ -36,7 +36,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/my-reservations" element={<MyReservations />} />
               <Route path="/my-reservations/:id" element={<ReservationDetail />} />
 
@@ -60,7 +60,13 @@ function App() {
               <Route path="/payments/bills" element={<Bills />} />
               <Route path="/payments/bills/new" element={<BillCreate />} />
               <Route path="/payments/bills/:id" element={<BillEdit />} />
-            </Routes>
+
+              {/*WORKER */}
+              <Route path="/workers" element={<WorkerManagement />} />
+              <Route path="create-task" element={<CreateTask />} />
+              <Route path="/task-list" element={<TaskList />} />
+              <Route path="/planning" element={<Planning />} />
+              </Routes>
           </main>
         </div>
       </Router>

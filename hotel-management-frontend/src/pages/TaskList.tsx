@@ -1,76 +1,193 @@
-import React, { useState } from 'react';
+// TaskList.tsx
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { mockTasks, type Task } from '../data/task';
-import { mockWorkers } from '../data/worker';
+import axios from 'axios';
+import { useAuth } from '../services/AuthContext';
 import '../styles/worker.css';
 
-// Helper function to get worker name from ID
-const getWorkerName = (workerId: number | null): string => {
-  if (!workerId) return 'No worker assigned';
-  const worker = mockWorkers.find(w => w.id === workerId);
-  return worker ? `${worker.name} ${worker.surname}` : 'Unknown worker';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
+type TaskFromApi = {
+  id: number;
+  name: string;
+  reserved: boolean;
+  worker: number | null;
+  worker_name: string | null;
+  start_datetime?: string | null;
+  end_datetime?: string | null;
+  upload_date?: string | null;
+  completion_date?: string | null;
+  // other fields possible
 };
 
 const TaskList: React.FC = () => {
-  const [statusFilter, setStatusFilter] = useState<string>('All Tasks');
+  const { user } = useAuth();
+  const [tasks, setTasks] = useState<TaskFromApi[]>([]);
+  const [statusFilter, setStatusFilter] = useState<'All Tasks' | 'Pending' | 'In Progress' | 'Completed'>('All Tasks');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Determine task status based on dates and reserved flag
-  const getTaskStatus = (task: Task): 'Completed' | 'In Progress' | 'Pending' => {
-    const now = new Date();
-    const completionDate = new Date(task.completionDate);
-    const uploadDate = new Date(task.uploadDate);
 
-    if (completionDate < now) {
-      return 'Completed';
-    } else if (uploadDate <= now && task.reserved) {
-      return 'In Progress';
-    } else {
-      return 'Pending';
+  const token = localStorage.getItem('access_token');
+
+  const fetchTasks = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/worker/tasks/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      const data = res.data;
+      // backend may return paginated object { results: [...] } or directly an array
+      if (Array.isArray(data)) {
+        setTasks(data);
+      } else if (Array.isArray(data.results)) {
+        setTasks(data.results);
+      } else {
+        // defensive fallback
+        console.warn('Unexpected tasks response shape', data);
+        setTasks([]);
+      }
+    } catch (err: any) {
+      console.error('Error fetching tasks', err);
+      setError('Failed to load tasks from server.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Filter tasks based on selected status
-  const filteredTasks = mockTasks.filter(task => {
+  useEffect(() => {
+    fetchTasks();
+  }, [token]);
+
+  // Utility to determine status
+  const getTaskStatus = (task: TaskFromApi): 'Completed' | 'In Progress' | 'Pending' => {
+    if (task.completion_date) return 'Completed';
+    if (task.worker) return 'In Progress';
+    return 'Pending';
+  };
+
+
+  const getBorderColor = (task: TaskFromApi) => {
+    if (task.completion_date) return '#3b82f6'; 
+    if (task.worker) return '#10b981';
+    if (task.reserved) return '#ef4444'; 
+    return '#f59e0b'; 
+  };
+
+  const formatDate = (maybeDate?: string | null) => {
+    if (!maybeDate) return '-';
+    try {
+      const d = new Date(maybeDate);
+      return d.toLocaleString();
+    } catch {
+      return maybeDate;
+    }
+  };
+
+  const handleClaim = async (taskId: number) => {
+    if (!user) {
+      alert('You must be logged in to claim a task.');
+      return;
+    }
+  
+
+    if (!user.worker_id) {
+      alert('Only staff members can claim tasks.');
+      console.log('User role:', user.role);
+      console.log('Worker ID:', user.worker_id); 
+      return;
+    }
+  
+    try {
+      const payload = {
+        worker: user.worker_id,  
+      };
+    
+      console.log("CLAIM → worker_id =", user.worker_id);
+    
+      await axios.put(`${API_BASE_URL}/worker/tasks/${taskId}/`, payload, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+    
+      await fetchTasks();
+      alert('Task claimed successfully!');
+    } catch (error: any) {
+      console.error('Claim failed:', error);
+      console.error('Response data:', error.response?.data);
+      alert(`Failed to claim task: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  const handleDelete = async (taskId: number) => {
+    if (!user) {
+      alert('You must be logged in to delete a task.');
+      return;
+    }
+
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    if (String(task.worker) !== String(user.worker_id)) {
+      alert('Only the worker who completed the task can delete it.');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+
+    try {
+      await axios.delete(`${API_BASE_URL}/worker/tasks/${taskId}/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      await fetchTasks();
+      alert('Task deleted successfully.');
+    } catch (err) {
+      console.error('Delete failed', err);
+      alert('Unable to delete task. Check console for details.');
+    }
+  };
+
+
+
+  // Complete a task (only allowed for owner) — sets completion_date to now
+  const handleComplete = async (task: TaskFromApi) => {
+    if (!user) {
+      alert('You must be logged in to complete a task.');
+      return;
+    }
+    // compare as strings to be robust (user.id may be string)
+    if (String(task.worker) !== String(user.worker_id)) {
+      alert('Only the worker who claimed the task can complete it.');
+      return;
+    }
+
+    try {
+      const payload = {
+        completion_date: new Date().toISOString(),
+      };
+      await axios.put(`${API_BASE_URL}/worker/tasks/${task.id}/`, payload, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      await fetchTasks();
+    } catch (err) {
+      console.error('Complete failed', err);
+      alert('Unable to complete task. Check console for details.');
+    }
+  };
+
+  // Filter tasks for render
+  const filteredTasks = tasks.filter((t) => {
     if (statusFilter === 'All Tasks') return true;
-    return getTaskStatus(task) === statusFilter;
+    return getTaskStatus(t) === statusFilter;
   });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Pending':
-        return '#f59e0b'; // Orange
-      case 'In Progress':
-        return '#3b82f6'; // Blue
-      case 'Completed':
-        return '#10b981'; // Green
-      default:
-        return '#6b7280';
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  // Extract room number from task name if it contains "Room XXX"
-  const extractRoomNumber = (taskName: string): string | null => {
-    const match = taskName.match(/Room\s+(\d+)/i);
-    return match ? match[1] : null;
-  };
 
   return (
     <div className="worker-management-container">
       <div className="breadcrumb">
         <Link to="/workers">← Back to Worker Management</Link>
       </div>
-      
+
       <header className="worker-header">
         <h1>📋 Task List</h1>
         <p>Manage and track all worker tasks</p>
@@ -81,10 +198,10 @@ const TaskList: React.FC = () => {
           <label htmlFor="status-filter" style={{ marginRight: '0.5rem', color: '#5a6c7d' }}>
             Filter by status:
           </label>
-          <select 
+          <select
             id="status-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
             style={{
               padding: '0.5rem 1rem',
               borderRadius: '8px',
@@ -99,15 +216,22 @@ const TaskList: React.FC = () => {
             <option>Completed</option>
           </select>
         </div>
+
         <span style={{ color: '#5a6c7d', fontSize: '1.1rem', fontWeight: '500' }}>
-          {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
+          {loading ? 'Loading...' : `${filteredTasks.length} task${filteredTasks.length !== 1 ? 's' : ''}`}
         </span>
       </div>
 
-      {filteredTasks.length === 0 ? (
-        <div className="check-message">
-          <h2>📭 No Tasks Available</h2>
-          <p>There are currently no tasks matching your filter. Try a different status!</p>
+      {error && (
+        <div style={{ padding: '10px', marginBottom: '15px', backgroundColor: '#fee', border: '1px solid #fcc', borderRadius: '4px', color: '#c00' }}>
+          {error}
+        </div>
+      )}
+
+      {(!loading && filteredTasks.length === 0) ? (
+        <div className="check-message" style={{ marginBottom: '2rem' }}>
+          <h2>📭 No Tasks Found</h2>
+          <p style={{ color: 'rgba(255,255,255,0.95)' }}>There are currently no tasks matching your filter.</p>
         </div>
       ) : (
         <div style={{
@@ -116,63 +240,41 @@ const TaskList: React.FC = () => {
           gap: '2rem',
           marginBottom: '2rem'
         }}>
-          {filteredTasks.map(task => {
+          {filteredTasks.map((task) => {
             const status = getTaskStatus(task);
-            const roomNumber = extractRoomNumber(task.name);
-            
+            const borderColor = getBorderColor(task);
+
             return (
               <div key={task.id} style={{
                 background: 'white',
                 padding: '2rem',
                 borderRadius: '8px',
                 boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-                border: '3px solid',
-                borderColor: status === 'Completed' ? '#10b981' : 
-                            status === 'In Progress' ? '#3b82f6' : '#f59e0b',
-                borderLeft: '8px solid',
+                borderLeft: `8px solid ${borderColor}`,
+                border: `3px solid ${borderColor}`,
                 position: 'relative',
                 transition: 'all 0.25s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.15)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)';
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                   <div style={{ flex: 1 }}>
-                    <h2 style={{ 
-                      fontSize: '1.3rem', 
-                      fontWeight: '600', 
+                    <h2 style={{
+                      fontSize: '1.3rem',
+                      fontWeight: '600',
                       color: '#2c3e50',
                       marginBottom: '0.5rem',
                       lineHeight: '1.3'
-                    }}>
-                      {task.name}
-                    </h2>
-                    {roomNumber && (
-                      <p style={{ 
-                        color: '#667eea', 
-                        fontSize: '0.95rem',
-                        fontWeight: '500'
-                      }}>
-                        🏨 Room {roomNumber}
-                      </p>
-                    )}
+                    }}>{task.name}</h2>
                   </div>
+
                   <span style={{
                     padding: '0.5rem 1rem',
                     borderRadius: '20px',
                     fontSize: '0.875rem',
                     fontWeight: '600',
                     color: 'white',
-                    backgroundColor: getStatusColor(status),
+                    backgroundColor: borderColor,
                     whiteSpace: 'nowrap'
-                  }}>
-                    {status}
-                  </span>
+                  }}>{status}</span>
                 </div>
 
                 <div style={{
@@ -182,67 +284,71 @@ const TaskList: React.FC = () => {
                   marginBottom: '1rem'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <span style={{ fontSize: '1.25rem' }}>🆔</span>
-                    <span style={{ color: '#5a6c7d', fontSize: '0.9rem' }}>
-                      Task ID: <strong style={{ color: '#2c3e50' }}>{task.idTask}</strong>
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
                     <span style={{ fontSize: '1.25rem' }}>👤</span>
-                    <span style={{ color: '#5a6c7d', fontSize: '0.9rem' }}>
-                      Assigned to: <strong style={{ color: '#2c3e50' }}>{getWorkerName(task.fkWorkeridWorker)}</strong>
+                    <span style={{ color: '#5a6c7d', fontSize: '0.95rem' }}>
+                      <strong>Assigned to:</strong>{' '}
+                      <strong style={{ color: '#2c3e50' }}>
+                        {task.worker_name ?? 'No worker assigned'}
+                      </strong>
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                     <span style={{ fontSize: '1.25rem' }}>📤</span>
                     <span style={{ color: '#5a6c7d', fontSize: '0.9rem' }}>
-                      Upload: {formatDate(task.uploadDate)}
+                      Upload: {formatDate(task.upload_date)}
                     </span>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '1.25rem' }}>📅</span>
                     <span style={{ color: '#5a6c7d', fontSize: '0.9rem' }}>
-                      Due: {formatDate(task.completionDate)}
+                      Due: {formatDate(task.end_datetime ?? task.completion_date)}
                     </span>
                   </div>
                 </div>
 
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
                   paddingTop: '1rem',
                   borderTop: '1px solid #e0e0e0'
                 }}>
-                  <span style={{ color: '#5a6c7d', fontSize: '0.9rem' }}>
-                    Task #{task.taskId}
-                  </span>
-                  <Link 
-                    to={`/tasks/${task.id}`}
-                    style={{
-                      color: '#667eea',
-                      textDecoration: 'none',
-                      fontWeight: '500',
-                      fontSize: '0.95rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      transition: 'all 0.25s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.color = '#764ba2';
-                      e.currentTarget.style.transform = 'translateX(4px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = '#667eea';
-                      e.currentTarget.style.transform = 'translateX(0)';
-                    }}
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  {/* Claim button appears only if task is unclaimed and not completed */}
+                  {!task.worker && !task.completion_date && (
+                  <button
+                    className="btn-primary"
+                    onClick={() => handleClaim(task.id)}
                   >
-                    View Details →
-                  </Link>
+                  Claim Task
+                  </button>
+                  )}
+
+                  {/* Complete button appears only if task is claimed, not completed, and assigned to current user */}
+                  {task.worker && !task.completion_date && String(task.worker) === String(user?.worker_id) && (
+                  <button
+                    className="btn-primary"
+                    style={{ backgroundColor: '#10b981' }}
+                    onClick={() => handleComplete(task)}
+                  >
+                  Complete Task
+                  </button>
+                  )}
+
+                  {/* Delete Completed Task button */}
+                  {task.completion_date && String(task.worker) === String(user?.worker_id) && (
+                    <button
+                      className="btn-danger"
+                      style={{ backgroundColor: '#ef4444' }}
+                      onClick={() => handleDelete(task.id)}
+                    >
+                      Delete Task
+                    </button>
+                  )}
+                </div>
+
                 </div>
               </div>
             );
@@ -251,9 +357,7 @@ const TaskList: React.FC = () => {
       )}
 
       <div className="navigation-link">
-        <Link to="/planning" className="nav-button">
-          📅 Access Planning →
-        </Link>
+        <Link to="/planning" className="nav-button">📅 Access Planning →</Link>
       </div>
     </div>
   );

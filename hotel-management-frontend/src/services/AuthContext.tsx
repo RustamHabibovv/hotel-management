@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const value: AuthContextValue = {
     user,
-    isAdmin: user?.role === 'ADMIN',
+    isAdmin: user?.role === 'admin',
     login,
     logout,
     setUser,

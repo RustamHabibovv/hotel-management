@@ -38,6 +38,16 @@ CREATE TABLE worker (
     FOREIGN KEY (fk_hotel_id) REFERENCES hotel(id_hotel)
 );
 
+CREATE TABLE task (
+    id_task SERIAL PRIMARY KEY,
+    name VARCHAR(255),
+    upload_date VARCHAR(255),
+    completion_date VARCHAR(255),
+    reserved BOOLEAN,
+    staff_assigned VARCHAR(255),
+    FOREIGN KEY (fk_WorkedId_Worker) REFERENCES worker(id_worker)
+);
+
 CREATE TABLE reservation (
     id_reservation SERIAL PRIMARY KEY,
     date DATE NOT NULL,

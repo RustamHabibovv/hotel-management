@@ -1,58 +1,154 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { mockTasks, type Task } from '../data/task';
-import { mockWorkers } from '../data/worker';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { useAuth } from '../services/AuthContext';
 import '../styles/worker.css';
 
-const getTasks = (): Task[] => {
-  const stored = localStorage.getItem('tasks');
-  return stored ? JSON.parse(stored) : mockTasks;
-};
-const saveTasks = (tasks: Task[]) => {
-  localStorage.setItem('tasks', JSON.stringify(tasks));
-};
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
+interface Task {
+  id?: number;
+  name: string;
+  start_datetime: string;
+  end_datetime: string;
+  reserved: boolean;
+  worker: number | null;
+}
 
 const CreateTask: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [mode, setMode] = useState<'create' | 'edit'>('create');
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [error, setError] = useState('');
+
   const [formData, setFormData] = useState({
     name: '',
-    uploadDate: '',
-    completionDate: '',
+    start_datetime: '',
+    end_datetime: '',
     reserved: false,
-    fkWorkeridWorker: null as number | null,
+    worker: null,
   });
 
-  const [showSuccess, setShowSuccess] = useState(false);
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!user) {
+      navigate('/login');
+    }
+  }, [user, navigate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Fetch tasks on mount
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const fetchTasks = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get(`${API_BASE_URL}/worker/tasks/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      console.log("TASKS FROM API = ", response.data);
+      setTasks(response.data.results);
+    } catch (err) {
+      console.error('Error fetching tasks:', err);
+    }
+  };
+  
+
+  const handleModeChange = (newMode: 'create' | 'edit') => {
+    setMode(newMode);
+    setError('');
+    setShowSuccess(false);
+    
+    if (newMode === 'create') {
+      setFormData({
+        name: '',
+        start_datetime: '',
+        end_datetime: '',
+        reserved: false,
+        worker: null,
+      });
+      setSelectedTaskId(null);
+    }
+  };
+
+  const handleTaskSelect = async (taskId: number) => {
+    if (!taskId) return; // Ne rien faire si aucune tâche n'est sélectionnée
+    
+    setSelectedTaskId(taskId);
+    setError('');
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get(`${API_BASE_URL}/worker/tasks/${taskId}/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const task = response.data;
+      setFormData({
+        name: task.name || '',
+        start_datetime: task.start_datetime ? task.start_datetime.slice(0, 16) : '',
+        end_datetime: task.end_datetime ? task.end_datetime.slice(0, 16) : '',
+        reserved: task.reserved || false,
+        worker: task.worker ?? null,
+      });
+    } catch (err) {
+      console.error('Error fetching task details:', err);
+      setError('Failed to load task details');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
 
-    const currentTasks = getTasks();
+    try {
+      const token = localStorage.getItem('access_token');
+      const payload = {
+        name: formData.name,
+        start_datetime: formData.start_datetime,
+        end_datetime: formData.end_datetime,
+        reserved: formData.reserved,
+        worker: null, 
+      };
 
-    const newTask: Task = {
-      id: currentTasks.length + 1,
-      name: formData.name,
-      taskId: 1000 + currentTasks.length + 1,
-      uploadDate: new Date(formData.uploadDate).toISOString(),
-      completionDate: new Date(formData.completionDate).toISOString(),
-      reserved: formData.reserved,
-      idTask: `T${String(currentTasks.length + 1).padStart(3, '0')}`,
-      fkWorkeridWorker: formData.fkWorkeridWorker,
-    };
+      if (mode === 'create') {
+        await axios.post(`${API_BASE_URL}/worker/tasks/`, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setShowSuccess(true);
+        
+        // Reset form
+        setFormData({
+          name: '',
+          start_datetime: '',
+          end_datetime: '',
+          reserved: false,
+          worker: null,
+        });
+      } else {
+        await axios.put(`${API_BASE_URL}/worker/tasks/${selectedTaskId}/`, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setShowSuccess(true);
+      }
 
-    const updatedTasks = [...currentTasks, newTask];
-    saveTasks(updatedTasks);
-
-    setShowSuccess(true);
-
-    setFormData({
-      name: '',
-      uploadDate: '',
-      completionDate: '',
-      reserved: false,
-      fkWorkeridWorker: null,
-    });
-
-    setTimeout(() => setShowSuccess(false), 3000);
+      // Refresh tasks list
+      fetchTasks();
+      
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error saving task:', err);
+      setError(err.response?.data?.error || 'Failed to save task');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -61,17 +157,14 @@ const CreateTask: React.FC = () => {
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
       setFormData(prev => ({ ...prev, [name]: checked }));
-    } else if (name === 'fkWorkeridWorker') {
-      setFormData(prev => ({ 
-        ...prev, 
-        [name]: value ? parseInt(value) : null 
-      }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
   };
 
-  const currentTaskCount = getTasks().length;
+  if (!user) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="worker-management-container">
@@ -80,12 +173,94 @@ const CreateTask: React.FC = () => {
       </div>
       
       <header className="worker-header">
-        <h1>📝 Create a Task</h1>
+        <h1>📝 {mode === 'create' ? 'Create a Task' : 'Edit a Task'}</h1>
+        <p className="subtitle">
+          {mode === 'create' 
+            ? 'Create unassigned tasks. Workers can claim them later.' 
+            : 'Modify existing task details.'}
+        </p>
       </header>
+
+      {/* Mode Selector */}
+      <div className="mode-selector" style={{
+        display: 'flex',
+        gap: '10px',
+        marginBottom: '20px',
+        justifyContent: 'center'
+      }}>
+        <button
+          type="button"
+          onClick={() => handleModeChange('create')}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: mode === 'create' ? '#007bff' : '#6c757d',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '1rem'
+          }}
+        >
+          ➕ Create New Task
+        </button>
+        <button
+          type="button"
+          onClick={() => handleModeChange('edit')}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: mode === 'edit' ? '#007bff' : '#6c757d',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '1rem'
+          }}
+        >
+          ✏️ Edit Existing Task
+        </button>
+      </div>
+
+      {/* Task selector for edit mode */}
+      {mode === 'edit' && (
+        <div className="form-group">
+          <label htmlFor="taskSelect">Select a task to edit *</label>
+          <select
+            id="taskSelect"
+            value={selectedTaskId || ''}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value) {
+                handleTaskSelect(parseInt(value));
+              }
+            }}
+            required
+          >
+            <option value="">-- Select a task --</option>
+            {tasks.map(task => (
+              <option key={task.id} value={task.id}>
+                {task.name || `Task #${task.id}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {showSuccess && (
         <div className="success-banner">
-          ✅ Task Created with success !
+          ✅ Task {mode === 'create' ? 'created' : 'updated'} successfully!
+        </div>
+      )}
+
+      {error && (
+        <div className="error-message" style={{
+          padding: '10px',
+          marginBottom: '15px',
+          backgroundColor: '#fee',
+          border: '1px solid #fcc',
+          borderRadius: '4px',
+          color: '#c00'
+        }}>
+          {error}
         </div>
       )}
 
@@ -105,45 +280,28 @@ const CreateTask: React.FC = () => {
 
         <div className="form-row">
           <div className="form-group">
-            <label htmlFor="uploadDate">Starting day *</label>
+            <label htmlFor="start_datetime">Starting Date/Time *</label>
             <input
               type="datetime-local"
-              id="uploadDate"
-              name="uploadDate"
-              value={formData.uploadDate}
+              id="start_datetime"
+              name="start_datetime"
+              value={formData.start_datetime}
               onChange={handleChange}
               required
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="completionDate">End day *</label>
+            <label htmlFor="end_datetime">End Date/Time *</label>
             <input
               type="datetime-local"
-              id="completionDate"
-              name="completionDate"
-              value={formData.completionDate}
+              id="end_datetime"
+              name="end_datetime"
+              value={formData.end_datetime}
               onChange={handleChange}
               required
             />
           </div>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="fkWorkeridWorker">Assign to a worker</label>
-          <select
-            id="fkWorkeridWorker"
-            name="fkWorkeridWorker"
-            value={formData.fkWorkeridWorker || ''}
-            onChange={handleChange}
-          >
-            <option value="">-- No worker assigned --</option>
-            {mockWorkers.map(worker => (
-              <option key={worker.id} value={worker.id}>
-                {worker.name} {worker.surname} - {worker.jobs}
-              </option>
-            ))}
-          </select>
         </div>
 
         <div className="form-group checkbox-group">
@@ -154,13 +312,13 @@ const CreateTask: React.FC = () => {
               checked={formData.reserved}
               onChange={handleChange}
             />
-            <span>Reserved/important task</span>
+            <span>Mark as reserved/important task</span>
           </label>
         </div>
 
         <div className="form-actions">
-          <button type="submit" className="btn-primary">
-            ✅ Create the task
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? 'Saving...' : mode === 'create' ? '✅ Create Task' : '💾 Update Task'}
           </button>
           <Link to="/workers" className="btn-secondary">
             Cancel
@@ -169,9 +327,9 @@ const CreateTask: React.FC = () => {
       </form>
 
       <div className="info-box">
-        <h3>📊 Actual statistics</h3>
-        <p>Total number of tasks : <strong>{currentTaskCount}</strong></p>
-        <p>Avalaible workers: <strong>{mockWorkers.length}</strong></p>
+        <h3>📊 Current Statistics</h3>
+        <p>Total tasks: <strong>{tasks.length}</strong></p>
+        <p className="info-note">Workers can claim their tasks in the Task List!</p>
       </div>
     </div>
   );

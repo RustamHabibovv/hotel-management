@@ -36,6 +36,7 @@ from user.views import custom_login, get_current_user, register
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    path("api/worker/", include("worker.urls")),
     
     # JWT Authentication endpoints
     path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
