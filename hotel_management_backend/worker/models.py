@@ -11,6 +11,8 @@ class Worker(models.Model):
     jobs = models.CharField(max_length=255, blank=True, null=True)
     contact_info = models.CharField(max_length=255, blank=True, null=True)
     hotel = models.ForeignKey(Hotel, on_delete=models.CASCADE)
+    google_access_token = models.TextField(blank=True, null=True)
+    google_refresh_token = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.name} {self.surname}"
@@ -23,6 +25,7 @@ class Task(models.Model):
     start_datetime = models.DateTimeField(blank=True, null=True)
     end_datetime = models.DateTimeField(blank=True, null=True)
     reserved = models.BooleanField(default=False)
+    google_calendar_event_id = models.CharField(max_length=255, blank=True, null=True)
     worker = models.ForeignKey(Worker, on_delete=models.CASCADE, blank=True, null=True)
 
     def __str__(self):

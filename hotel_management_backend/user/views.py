@@ -1,4 +1,4 @@
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,6 +10,7 @@ from hotel.models import Hotel
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def custom_login(request):
     """
     Custom login endpoint - requires email and password.
@@ -53,6 +54,16 @@ def custom_login(request):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
+        # Get worker_id if user is STAFF
+        worker_id = None
+        if user.role == 'STAFF':
+            try:
+                worker = user.worker_set.first()
+                if worker:
+                    worker_id = worker.id
+            except Exception:
+                pass
+        
         # Create JWT tokens
         refresh = RefreshToken()
         refresh['user_id'] = user.id
@@ -81,6 +92,7 @@ def custom_login(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def register(request):
     """
     Register a new user.
@@ -217,9 +229,10 @@ def get_current_user(request):
     worker_id = None
     if user.role == 'STAFF':
         try:
-            worker = Worker.objects.get(user=user)
-            worker_id = worker.id
-        except Worker.DoesNotExist:
+            worker = user.worker_set.first()
+            if worker:
+                worker_id = worker.id
+        except Exception:
             pass
     
     return Response({

@@ -76,6 +76,11 @@ const TaskList: React.FC = () => {
     return '#f59e0b'; 
   };
 
+  const handleConnectGoogleCalendar = () => {
+    const token = localStorage.getItem('access_token');
+    window.location.href = `http://localhost:8000/api/worker/google/login/?token=${token}`;
+  };
+
   const formatDate = (maybeDate?: string | null) => {
     if (!maybeDate) return '-';
     try {
@@ -193,6 +198,26 @@ const TaskList: React.FC = () => {
         <p>Manage and track all worker tasks</p>
       </header>
 
+    <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+      <button
+        onClick={handleConnectGoogleCalendar}
+        className="btn-primary"
+        style={{
+          padding: '1rem 2rem',
+          fontSize: '1.1rem',
+          backgroundColor: '#4285f4',
+          border: 'none',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.5rem'
+        }}
+      >
+        📅 Link your Google Calendar
+      </button>
+    </div>
+
       <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <label htmlFor="status-filter" style={{ marginRight: '0.5rem', color: '#5a6c7d' }}>
@@ -303,6 +328,13 @@ const TaskList: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '1.25rem' }}>📅</span>
                     <span style={{ color: '#5a6c7d', fontSize: '0.9rem' }}>
+                      Start: {formatDate(task.start_datetime ?? task.completion_date)}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '1.25rem' }}>📅</span>
+                    <span style={{ color: '#5a6c7d', fontSize: '0.9rem' }}>
                       Due: {formatDate(task.end_datetime ?? task.completion_date)}
                     </span>
                   </div>
@@ -325,7 +357,7 @@ const TaskList: React.FC = () => {
                   Claim Task
                   </button>
                   )}
-
+                  
                   {/* Complete button appears only if task is claimed, not completed, and assigned to current user */}
                   {task.worker && !task.completion_date && String(task.worker) === String(user?.worker_id) && (
                   <button

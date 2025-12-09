@@ -12,6 +12,7 @@ type TaskFromApi = {
   worker: number | null;
   worker_name: string | null;
   upload_date?: string | null;
+  start_datetime?: string | null;
   completion_date?: string | null;
   end_datetime?: string | null; 
 };
@@ -66,9 +67,9 @@ const Planning: React.FC = () => {
 
   const getTasksForDay = (date: Date): TaskFromApi[] => {
     return filteredTasks.filter(task => {
-      if (!task.upload_date) return false;
+      if (!task.start_datetime) return false;
 
-      const upload = new Date(task.upload_date);
+      const upload = new Date(task.start_datetime);
       const end = task.end_datetime
         ? new Date(task.end_datetime)
         : upload;
@@ -88,7 +89,7 @@ const Planning: React.FC = () => {
     date.toDateString() === new Date().toDateString();
 
   const getTaskStatus = (task: TaskFromApi, date: Date) => {
-    const upload = new Date(task.upload_date!);
+    const upload = new Date(task.start_datetime!);
     const end = task.end_datetime ? new Date(task.end_datetime) : null;
 
     const day = new Date(date);

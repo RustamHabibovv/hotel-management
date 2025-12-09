@@ -4,7 +4,9 @@ from .views import (
     WorkerDetailView,
     TaskListCreateView,
     TaskDetailView,
-    TaskCalendarView
+    TaskCalendarView,
+    google_login,
+    google_callback
 )
 
 urlpatterns = [
@@ -18,4 +20,8 @@ urlpatterns = [
     
     # Calendar endpoint
     path('tasks/calendar/', TaskCalendarView.as_view(), name='task-calendar'),
+
+    # Google
+    path('google/login/', google_login, name='google_login'),
+    path('google/callback/', google_callback, name='google_callback'),
 ]
