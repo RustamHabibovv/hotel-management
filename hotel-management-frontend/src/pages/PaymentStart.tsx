@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
 import '../styles/PaymentManagement.css';
+import axios from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 interface Bill {
   id: number;
@@ -18,52 +20,53 @@ const PaymentStart = () => {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [amount, setAmount] = useState(0);
 
+  const token = localStorage.getItem('access_token');
+  const headers = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : {};
+
   useEffect(() => {
-    axios.get('http://localhost:8000/api/bills/')
-      .then(res => setBills(res.data.results.filter((b: Bill) => b.status === 'Unpaid')))
-      .catch(err => console.error(err));
+    const fetchBills = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/bills/`, { headers });
+        setBills(res.data.results.filter((b: Bill) => b.status === 'Unpaid'));
+      } catch (err) {
+        console.error('Failed to fetch bills', err);
+      }
+    };
+
+    fetchBills();
   }, []);
 
-  const handlePayment = () => {
+  const handlePayment = async () => {
     if (!selectedBill) return alert('Select a bill!');
-    axios.post('http://localhost:8000/api/payments/', {
-      bill: selectedBill.id,
-      amount,
-      type: paymentMethod,
-      date: new Date().toISOString().split('T')[0],
-      state: true
-    })
-    .then(() => {
-      axios.patch(`http://localhost:8000/api/bills/${selectedBill.id}/`, { status: 'Paid' })
-        .then(() => alert(`Payment completed for Bill #${selectedBill.id}`))
-        .catch(err => console.error(err));
-    })
-    .catch(err => console.error(err));
+
+    try {
+      await axios.post(
+        `${API_BASE_URL}/payments/`,
+        {
+          bill: selectedBill.id,
+          amount,
+          type: paymentMethod,
+          date: new Date().toISOString().split('T')[0],
+          state: true,
+        },
+        { headers }
+      );
+
+      // Mark bill as paid
+      await axios.patch(`${API_BASE_URL}/bills/${selectedBill.id}/`, { status: 'Paid' }, { headers });
+
+      alert(`Payment completed for Bill #${selectedBill.id}`);
+      setSelectedBill(null);
+      setAmount(0);
+
+      // Refresh bills
+      const res = await axios.get(`${API_BASE_URL}/bills/`, { headers });
+      setBills(res.data.results.filter((b: Bill) => b.status === 'Unpaid'));
+    } catch (err: any) {
+      console.error('Payment failed', err);
+      alert(err.response?.data?.detail || 'Payment failed. Are you logged in?');
+    }
   };
-
-  const handleOnlineBanking = () => {
-    if (!selectedBill) return alert('Select a bill!');
-    
-    axios.post('http://localhost:8000/api/online-bank-payments/', {
-
-      bill: selectedBill.id,
-       amount,
-       type: 'bank',
-       date: new Date().toISOString().split('T')[0]
-     })
-     .then(res => {
-       alert(`Bank payment successful! Transaction ID: ${res.data.transaction_id}`);
-       // Mark bill as paid
-       axios.patch(`http://localhost:8000/api/bills/${selectedBill.id}/`, { status: 'Paid' })
-         .then(() => setSelectedBill(null))
-         .catch(err => console.error(err));
-     })
-     .catch((err) => {
-        console.error(err);
-        alert('Bank payment failed');
-});
-
-  } ;
 
   return (
     <div className="page">
@@ -83,48 +86,50 @@ const PaymentStart = () => {
         </thead>
         <tbody>
           {bills.map(bill => (
-            <tr key={bill.id} onClick={() => { setSelectedBill(bill); setAmount(bill.amount); }}
-              className={selectedBill?.id === bill.id ? 'selected-row' : ''}>
+            <tr
+              key={bill.id}
+              onClick={() => {
+                setSelectedBill(bill);
+                setAmount(bill.amount);
+              }}
+              className={selectedBill?.id === bill.id ? 'selected-row' : ''}
+            >
               <td>{bill.id}</td>
               <td>{bill.name}</td>
               <td>{bill.room}</td>
               <td>${bill.amount}</td>
-              <td className={bill.status === 'Paid' ? 'status-paid' : 'status-unpaid'}>
-                {bill.status}
-              </td>
+              <td className={bill.status === 'Paid' ? 'status-paid' : 'status-unpaid'}>{bill.status}</td>
             </tr>
           ))}
         </tbody>
       </table>
-
 
       {selectedBill && (
         <form className="payment-form" onSubmit={e => { e.preventDefault(); handlePayment(); }}>
           <h3>Selected Bill #{selectedBill.id} - Room {selectedBill.room}</h3>
 
           <label>Payment Method</label>
-          <select className="input-field" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+          <select
+            className="input-field"
+            value={paymentMethod}
+            onChange={e => setPaymentMethod(e.target.value)}
+          >
             <option value="cash">Cash</option>
             <option value="card">Card</option>
             <option value="bank">Online Banking</option>
           </select>
 
           <label>Amount</label>
-          <input className="input-field" type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} />
+          <input
+            className="input-field"
+            type="number"
+            value={amount}
+            onChange={e => setAmount(Number(e.target.value))}
+          />
 
-          {paymentMethod === 'bank' && (
-            <button type="button" className="submit-btn" onClick={handleOnlineBanking}>
-              Connect to Bank
-            </button>
-          )}
-
-          {paymentMethod !== 'bank' && (
-            <button type="submit" className="submit-btn">Submit Payment</button>
-          )}
+          <button type="submit" className="submit-btn">Submit Payment</button>
         </form>
       )}
-
-
     </div>
   );
 };

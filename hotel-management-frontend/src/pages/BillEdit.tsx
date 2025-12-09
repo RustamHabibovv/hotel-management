@@ -9,6 +9,8 @@ interface Reservation {
   number_of_guests: number;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
 const BillEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -22,17 +24,29 @@ const BillEdit = () => {
   const [reservationId, setReservationId] = useState<number | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
 
+  const token = localStorage.getItem('access_token');
+  const headers = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : {};
+
   // Fetch reservations
   useEffect(() => {
-    axios.get('http://localhost:8000/api/reservations/')
-      .then(res => setReservations(res.data.results || []))
-      .catch(err => console.error(err));
+    const fetchReservations = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/reservations/`, { headers });
+        setReservations(res.data.results || []);
+      } catch (err) {
+        console.error('Failed to fetch reservations', err);
+      }
+    };
+    fetchReservations();
   }, []);
 
   // Fetch bill data
   useEffect(() => {
-    axios.get(`http://localhost:8000/api/bills/${id}/`)
-      .then(res => {
+    if (!id) return;
+
+    const fetchBill = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/bills/${id}/`, { headers });
         const data = res.data;
         setName(data.name);
         setAmount(data.amount);
@@ -41,28 +55,38 @@ const BillEdit = () => {
         setTaxes(data.taxes);
         setStatus(data.status);
         setReservationId(data.reservation);
-      })
-      .catch(err => console.error(err));
+      } catch (err) {
+        console.error('Failed to fetch bill', err);
+      }
+    };
+    fetchBill();
   }, [id]);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reservationId) return alert('Select a reservation!');
 
-    axios.patch(`http://localhost:8000/api/bills/${id}/`, {
-      reservation: reservationId,
-      name,
-      amount,
-      room,
-      due_date: dueDate,
-      taxes,
-      status,
-    })
-    .then(() => {
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/bills/${id}/`,
+        {
+          reservation: reservationId,
+          name,
+          amount,
+          room,
+          due_date: dueDate,
+          taxes,
+          status,
+        },
+        { headers }
+      );
+
       alert(`Bill #${id} updated!`);
       navigate(-1);
-    })
-    .catch(err => console.error(err));
+    } catch (err: any) {
+      console.error('Failed to update bill', err);
+      alert(err.response?.data?.detail || 'Failed to update bill. Are you logged in?');
+    }
   };
 
   return (
@@ -73,7 +97,11 @@ const BillEdit = () => {
 
       <form className="payment-form" onSubmit={handleSave}>
         <label>Reservation</label>
-        <select value={reservationId || ''} onChange={e => setReservationId(Number(e.target.value))} required>
+        <select
+          value={reservationId || ''}
+          onChange={e => setReservationId(Number(e.target.value))}
+          required
+        >
           <option value="">Select Reservation</option>
           {reservations.map(r => (
             <option key={r.id} value={r.id}>

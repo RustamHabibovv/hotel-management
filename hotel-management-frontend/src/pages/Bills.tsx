@@ -13,21 +13,45 @@ interface Bill {
   status: string;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
 const Bills = () => {
   const [bills, setBills] = useState<Bill[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Helper to get headers with access token
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('access_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  // Load bills
+  const fetchBills = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/bills/`, { headers: getAuthHeaders() });
+      setBills(res.data.results || []);
+    } catch (err) {
+      console.error('Failed to load bills', err);
+      alert('Failed to load bills. Are you logged in?');
+    }
+  };
+
   useEffect(() => {
-    axios.get('http://localhost:8000/api/bills/')
-      .then(res => setBills(res.data.results || []))
-      .catch(err => console.error(err));
+    fetchBills();
   }, []);
 
-  const handleDelete = (id: number) => {
+  // Delete bill
+  const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this bill?')) return;
-    axios.delete(`http://localhost:8000/api/bills/${id}/`)
-      .then(() => setBills(bills.filter(b => b.id !== id)))
-      .catch(err => console.error(err));
+
+    try {
+      await axios.delete(`${API_BASE_URL}/bills/${id}/`, { headers: getAuthHeaders() });
+      setBills(bills.filter(b => b.id !== id));
+      alert(`Bill #${id} deleted`);
+    } catch (err: any) {
+      console.error('Failed to delete bill', err);
+      alert(err.response?.data?.detail || 'Failed to delete bill. Are you logged in?');
+    }
   };
 
   const filteredBills = bills.filter(b =>
@@ -38,19 +62,19 @@ const Bills = () => {
   return (
     <div className="page">
       <div className="page-header">
-      <h1>🧾 Bills</h1>
+        <h1>🧾 Bills</h1>
 
-      <div className="header-actions">
-        <input
-          type="text"
-          placeholder="Search by guest, ID..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="search-input"
-        />
-        <a href="/payments/bills/new" className="btn-small">+ Add New Bill</a>
+        <div className="header-actions">
+          <input
+            type="text"
+            placeholder="Search by guest, ID..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="search-input"
+          />
+          <a href="/payments/bills/new" className="btn-small">+ Add New Bill</a>
+        </div>
       </div>
-    </div>
 
       <table className="table">
         <thead>
