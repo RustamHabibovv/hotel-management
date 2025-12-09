@@ -38,8 +38,11 @@ const PaymentStart = () => {
 
   const handlePayment = async () => {
     if (!selectedBill) return alert('Select a bill!');
-
+    if (amount <= 0) return alert('Enter a valid payment amount!');
+    if (amount > selectedBill.amount) return alert('Payment exceeds remaining bill amount!');
+    
     try {
+      // Record the payment
       await axios.post(
         `${API_BASE_URL}/payments/`,
         {
@@ -51,15 +54,32 @@ const PaymentStart = () => {
         },
         { headers }
       );
-
-      // Mark bill as paid
-      await axios.patch(`${API_BASE_URL}/bills/${selectedBill.id}/`, { status: 'Paid' }, { headers });
-
-      alert(`Payment completed for Bill #${selectedBill.id}`);
+    
+      const remainingAmount = selectedBill.amount - amount;
+    
+      // Only mark bill as paid if full amount is paid
+      if (remainingAmount <= 0) {
+        await axios.patch(
+          `${API_BASE_URL}/bills/${selectedBill.id}/`,
+          { status: 'Paid', amount: 0 },
+          { headers }
+        );
+      } else {
+        // Update the remaining amount on the bill
+        await axios.patch(
+          `${API_BASE_URL}/bills/${selectedBill.id}/`,
+          { amount: remainingAmount },
+          { headers }
+        );
+      }
+    
+      alert(`Payment of $${amount} recorded for Bill #${selectedBill.id}. Remaining: $${remainingAmount}`);
+    
+      // Update local state
       setSelectedBill(null);
       setAmount(0);
-
-      // Refresh bills
+    
+      // Refresh unpaid bills
       const res = await axios.get(`${API_BASE_URL}/bills/`, { headers });
       setBills(res.data.results.filter((b: Bill) => b.status === 'Unpaid'));
     } catch (err: any) {
@@ -67,6 +87,8 @@ const PaymentStart = () => {
       alert(err.response?.data?.detail || 'Payment failed. Are you logged in?');
     }
   };
+
+
 
   return (
     <div className="page">
