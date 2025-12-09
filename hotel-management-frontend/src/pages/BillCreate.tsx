@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import '../styles/PaymentManagement.css';
+import { reservationService } from '../services/reservationService';
+import type { Reservation } from '../types';
 
-interface Reservation {
-  id: number;
-  date: string;
-  number_of_guests: number;
-}
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 const BillCreate = () => {
   const navigate = useNavigate();
@@ -20,35 +18,59 @@ const BillCreate = () => {
   const [reservationId, setReservationId] = useState<number | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
 
+  // Load reservations
   useEffect(() => {
-    axios.get('http://localhost:8000/api/reservations/')
-      .then(res => setReservations(res.data.results || []))
-      .catch(err => console.error(err));
+    const fetchReservations = async () => {
+      try {
+        const res = await reservationService.getMyReservations('all', 'check_in_date');
+        setReservations(res);
+      } catch (err) {
+        console.error('Failed to fetch reservations', err);
+      }
+    };
 
-    // Set default due date to +1 month
+    fetchReservations();
+
+    // Default due date = +1 month
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
     setDueDate(nextMonth.toISOString().split('T')[0]);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reservationId) return alert('Select a reservation!');
 
-    axios.post('http://localhost:8000/api/bills/', {
-      reservation: reservationId,
-      name,
-      amount,
-      room,
-      due_date: dueDate,
-      taxes,
-      status: 'Unpaid',
-    })
-    .then(() => {
-      alert('Bill created!');
-      navigate(-1); // Go back after creating
-    })
-    .catch(err => console.error(err));
+    if (!name || !amount || !room) return alert('Please fill in all required fields');
+
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) throw new Error('Not logged in');
+
+      await axios.post(
+        `${API_BASE_URL}/bills/`,
+        {
+          reservation: reservationId,
+          name,
+          amount,
+          room,
+          due_date: dueDate,
+          taxes,
+          status: 'Unpaid',
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      alert('Bill created successfully!');
+      navigate(-1);
+    } catch (err: any) {
+      console.error('Error creating bill:', err);
+      alert(err.response?.data?.detail || 'Failed to create bill. Are you logged in?');
+    }
   };
 
   return (
@@ -59,33 +81,71 @@ const BillCreate = () => {
 
       <form className="payment-form" onSubmit={handleSubmit}>
         <label>Reservation</label>
-        <select value={reservationId || ''} onChange={e => setReservationId(Number(e.target.value))} required>
-          <option value="">Select Reservation</option>
+        <select
+          value={reservationId ?? ''}
+          onChange={e => setReservationId(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">No reservation</option>
           {reservations.map(r => (
             <option key={r.id} value={r.id}>
-              {r.id} - {r.number_of_guests} guests on {r.date}
+              {r.id} - {r.numberOfGuests} guests on {r.checkInDate}
             </option>
           ))}
         </select>
 
         <label>Guest Name</label>
-        <input className="input-field" value={name} onChange={e => setName(e.target.value)} required />
+        <input
+          className="input-field"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          required
+        />
 
         <label>Total Amount</label>
-        <input className="input-field" type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} required />
+        <input
+          className="input-field"
+          type="number"
+          value={amount}
+          onChange={e => setAmount(Number(e.target.value))}
+          required
+        />
 
         <label>Room</label>
-        <input className="input-field" type="number" value={room} onChange={e => setRoom(Number(e.target.value))} required />
+        <input
+          className="input-field"
+          type="number"
+          value={room}
+          onChange={e => setRoom(Number(e.target.value))}
+          required
+        />
 
         <label>Taxes (%)</label>
-        <input className="input-field" type="number" value={taxes} min={0} onChange={e => setTaxes(Number(e.target.value))} required />
+        <input
+          className="input-field"
+          type="number"
+          value={taxes}
+          min={0}
+          onChange={e => setTaxes(Number(e.target.value))}
+          required
+        />
 
         <label>Due Date</label>
-        <input className="input-field" type="date" value={dueDate} min={new Date().toISOString().split('T')[0]} onChange={e => setDueDate(e.target.value)} required />
+        <input
+          className="input-field"
+          type="date"
+          value={dueDate}
+          min={new Date().toISOString().split('T')[0]}
+          onChange={e => setDueDate(e.target.value)}
+          required
+        />
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button type="submit" className="submit-btn">Create Bill</button>
-          <button type="button" className="submit-btn" onClick={() => navigate(-1)}>Cancel</button>
+          <button type="submit" className="submit-btn">
+            Create Bill
+          </button>
+          <button type="button" className="submit-btn" onClick={() => navigate(-1)}>
+            Cancel
+          </button>
         </div>
       </form>
     </div>

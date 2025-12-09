@@ -5,7 +5,13 @@ from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 
 class Bill(models.Model):
-    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE)
+    reservation = models.ForeignKey(
+    Reservation,
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True
+)
+
     name = models.CharField(max_length=255)
     amount = models.FloatField()
     room = models.IntegerField()

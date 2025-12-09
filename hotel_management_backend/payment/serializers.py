@@ -5,6 +5,9 @@ class BillSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bill
         fields = '__all__'
+        extra_kwargs = {
+            'reservation': {'required': False, 'allow_null': True}
+        }
 
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
