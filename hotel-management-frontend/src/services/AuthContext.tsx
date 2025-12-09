@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const isAdmin = user?.role === "ADMIN";
 
   // ----------------------------------------------------------
-  // Load current user from saved token (on page refresh)
+  // LOAD USER ON REFRESH (GET /auth/me/)
   // ----------------------------------------------------------
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -32,24 +32,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     fetch(API_ME, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
         if (!res.ok) throw new Error("Token invalid");
         return res.json();
       })
       .then((data) => {
-        // backend returns: { id, name, surname, email, role }
+        // backend returns:
+        // { id, name, surname, email, registered_payment_method, role }
         const mappedUser: User = {
-  id: data.user.id,
-  firstName: data.user.name,
-  lastName: data.user.surname,
-  email: data.user.email,
-  registered_payment_method: data.user.registered_payment_method ?? "",
-  role: data.user.role,
-};
+          id: data.id,
+          firstName: data.name,
+          lastName: data.surname,
+          email: data.email,
+          registered_payment_method: data.registered_payment_method ?? "",
+          role: data.role,
+        };
 
         setUser(mappedUser);
       })
@@ -61,7 +60,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   // ----------------------------------------------------------
-  // LOGIN: POST /api/auth/custom-login/
+  // LOGIN (POST /auth/custom-login/)
   // ----------------------------------------------------------
   const login = async (email: string, password: string) => {
     const res = await fetch(API_LOGIN, {
@@ -70,20 +69,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       body: JSON.stringify({ email, password }),
     });
 
-    if (!res.ok) {
-      throw new Error("Invalid email or password");
-    }
+    if (!res.ok) throw new Error("Invalid email or password");
 
     const data = await res.json();
-    // data.user = { id, name, surname, email, role }
 
     const mappedUser: User = {
       id: data.user.id,
       firstName: data.user.name,
       lastName: data.user.surname,
       email: data.user.email,
-      registered_payment_method:
-        data.user.registered_payment_method ?? undefined,
+      registered_payment_method: data.user.registered_payment_method ?? "",
       role: data.user.role,
     };
 
@@ -110,8 +105,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used inside AuthProvider");
-  }
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 };

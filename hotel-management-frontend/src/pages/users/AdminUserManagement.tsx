@@ -13,15 +13,16 @@ const AdminUserManagement = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Load and apply frontend search
+  // --------------------------
+  // LOAD USERS
+  // --------------------------
   const load = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const list = await getUsers();
+      const list = await getUsers(); // returns array
 
-      // Filter here (backend does not support searching)
       const q = query.toLowerCase();
       const filtered = list.filter(
         (u) =>
@@ -41,18 +42,23 @@ const AdminUserManagement = () => {
   };
 
   useEffect(() => {
-    load();
-  }, []); // Only load once on page open
+    load(); // load once on open
+  }, []);
 
+  // --------------------------
+  // SEARCH
+  // --------------------------
   const handleSearch = async (e: FormEvent) => {
     e.preventDefault();
-    await load();
+    load();
   };
 
+  // --------------------------
+  // DELETE USER
+  // --------------------------
   const handleDelete = async (id: number) => {
     if (!window.confirm("Delete this user?")) return;
 
-    // Prevent deleting yourself
     if (currentUser && Number(currentUser.id) === Number(id)) {
       alert("You cannot delete yourself.");
       return;
@@ -68,13 +74,12 @@ const AdminUserManagement = () => {
 
   return (
     <div className="page">
-      {/* HEADER */}
       <div className="page-header">
         <h1>User Management (Admin)</h1>
         <Link to="/users/new">+ Create User</Link>
       </div>
 
-      {/* SEARCH BAR */}
+      {/* SEARCH */}
       <form className="search-form" onSubmit={handleSearch}>
         <input
           placeholder="Search by name or email..."
@@ -85,6 +90,7 @@ const AdminUserManagement = () => {
       </form>
 
       {error && <div className="error-text">{error}</div>}
+      {loading && <div>Loading...</div>}
 
       {/* TABLE */}
       <table className="table">
@@ -101,9 +107,7 @@ const AdminUserManagement = () => {
         <tbody>
           {users.map((u) => (
             <tr key={u.id}>
-              <td>
-                {u.firstName} {u.lastName}
-              </td>
+              <td>{u.firstName} {u.lastName}</td>
               <td>{u.email}</td>
               <td>{u.registered_payment_method || "-"}</td>
               <td>

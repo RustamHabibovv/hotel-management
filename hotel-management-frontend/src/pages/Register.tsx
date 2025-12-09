@@ -49,8 +49,8 @@ const Register = () => {
       const response = await axios.post(`${API_BASE_URL}/auth/register/`, {
         email: formData.email,
         password: formData.password,
-        first_name: formData.firstName,
-        last_name: formData.lastName,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
         role: formData.userType,
       });
 
@@ -63,12 +63,10 @@ const Register = () => {
       // Create user object for context
       const loggedInUser: User = {
         id: backendUser.id.toString(),
-        username: backendUser.email.split('@')[0],
         firstName: backendUser.name,
         lastName: backendUser.surname,
         email: backendUser.email,
         role: backendUser.role,
-        password: '',
       };
 
       setUser(loggedInUser);

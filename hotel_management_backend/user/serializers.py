@@ -1,33 +1,21 @@
 from rest_framework import serializers
 from .models import User, UserHistory
-from django.contrib.auth.hashers import make_password
 
 
-# ====================================
-# USER SERIALIZER (USED FOR CRUD API)
-# ====================================
-from rest_framework import serializers
-from .models import User
-
-# ====================================
-# USER SERIALIZER (USED FOR CRUD + PROFILE)
-# ====================================
-from rest_framework import serializers
-from .models import User, UserHistory
-
-# ====================================
-# USER SERIALIZER (USED FOR CRUD + PROFILE)
-# ====================================
+# ============================================================
+# USER SERIALIZER (used for: admin list, admin update, profile update)
+# ============================================================
 class UserSerializer(serializers.ModelSerializer):
-    # Frontend-friendly field names
+    # Frontend-friendly names
     firstName = serializers.CharField(source="name", required=False)
     lastName = serializers.CharField(source="surname", required=False)
     email = serializers.EmailField(source="email_address", required=False)
+
     registered_payment_method = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
     )
 
-    # NEW FIELD (admin creates user only)
+    # Admin-only field (create user)
     password = serializers.CharField(write_only=True, required=False)
 
     class Meta:
@@ -39,12 +27,12 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "registered_payment_method",
             "role",
-            "password",   # <-- added
+            "password",  # admin create only
         ]
 
-    # ============================================================
-    # CREATE USER (ADMIN)
-    # ============================================================
+    # =====================================================
+    # CREATE USER (ADMIN ONLY)
+    # =====================================================
     def create(self, validated_data):
         # Extract mapped fields
         name = validated_data.pop("name", None)
@@ -60,75 +48,42 @@ class UserSerializer(serializers.ModelSerializer):
             registered_payment_method=validated_data.get("registered_payment_method"),
         )
 
-        # Password hashing
+        # Handle password
         if password:
             user.set_password(password)
         else:
-            user.set_password("default123")  # optional fallback
+            user.set_password("default123")
 
         user.save()
         return user
 
-    # ============================================================
-    # UPDATE USER (already correct)
-    # ============================================================
+    # =====================================================
+    # UPDATE USER (ADMIN OR PROFILE)
+    # =====================================================
     def update(self, instance, validated_data):
-        if "name" in validated_data:
-            instance.name = validated_data.pop("name")
 
-        if "surname" in validated_data:
-            instance.surname = validated_data.pop("surname")
+        # Mapped fields already inside validated_data
+        instance.name = validated_data.get("name", instance.name)
+        instance.surname = validated_data.get("surname", instance.surname)
+        instance.email_address = validated_data.get("email_address", instance.email_address)
 
-        if "email_address" in validated_data:
-            instance.email_address = validated_data.pop("email_address")
+        # Payment method
+        instance.registered_payment_method = validated_data.get(
+            "registered_payment_method", 
+            instance.registered_payment_method
+        )
 
-        if "registered_payment_method" in validated_data:
-            instance.registered_payment_method = validated_data.pop("registered_payment_method")
-
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
+        # Role (optional but allowed for admin)
+        if "role" in validated_data:
+            instance.role = validated_data["role"]
 
         instance.save()
         return instance
 
-# ====================================
-# REGISTRATION SERIALIZER
-# ====================================
-class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    password_confirm = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    
-    class Meta:
-        model = User
-        fields = ['name', 'surname', 'email_address', 'password', 'password_confirm', 'role']
-    
-    def validate(self, data):
-        if data['password'] != data['password_confirm']:
-            raise serializers.ValidationError("Passwords do not match.")
-        return data
-    
-    def create(self, validated_data):
-        validated_data.pop('password_confirm')
-        password = validated_data.pop('password')
 
-        # Create the user
-        user = User.objects.create(**validated_data)
-        user.set_password(password)
-        user.save()
-        
-        # Create user history
-        UserHistory.objects.create(
-            user=user,
-            date_of_registration=None,
-            number_of_reservations=0
-        )
-        
-        return user
-
-
-# ====================================
-# LOGIN SERIALIZER
-# ====================================
+# ============================================================
+# LOGIN SERIALIZER (only used if needed, safe to keep)
+# ============================================================
 class UserLoginSerializer(serializers.Serializer):
     email_address = serializers.EmailField()
-    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    password = serializers.CharField(write_only=True)

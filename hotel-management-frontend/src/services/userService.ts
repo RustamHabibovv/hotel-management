@@ -3,7 +3,7 @@ import type { User, UserRole } from "../types/User";
 const BASE_URL = "http://localhost:8000/api/users/";
 
 // ----------------------------
-// SAFE TOKEN HEADER BUILDER
+// MAP RAW API USER → FRONTEND USER OBJECT
 // ----------------------------
 function mapUser(raw: any): User {
   return {
@@ -16,53 +16,38 @@ function mapUser(raw: any): User {
   };
 }
 
+// ----------------------------
+// TOKEN HEADER
+// ----------------------------
 function buildHeaders(contentType = false): Record<string, string> {
   const headers: Record<string, string> = {};
+  if (contentType) headers["Content-Type"] = "application/json";
 
-  if (contentType) {
-    headers["Content-Type"] = "application/json";
-  }
+  const token =
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("access");
 
-  const token = localStorage.getItem("access_token"); // FIX HERE
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;
 }
 
-
 // ----------------------------
-// GET ALL USERS (ADMIN)
+// GET USERS (no pagination backend → returns array)
 // ----------------------------
 export async function getUsers(): Promise<User[]> {
   const res = await fetch(BASE_URL, {
     headers: buildHeaders(true),
   });
 
+  if (!res.ok) throw new Error("Failed to load users");
+
   const data = await res.json();
-  console.log("GET /users response:", res.status, data); // debug
 
-  // If the request itself failed (401, 403, 500, etc.)
-  if (!res.ok) {
-    throw new Error(`Failed to load users, status ${res.status}`);
-  }
+  if (Array.isArray(data)) return data.map(mapUser);
+  if (Array.isArray(data.results)) return data.results.map(mapUser);
 
-  // DRF WITHOUT pagination -> plain array
-  if (Array.isArray(data)) {
-    return data.map(mapUser);
-  }
-
-  // DRF WITH pagination -> { count, next, previous, results: [...] }
-  if (Array.isArray((data as any).results)) {
-    return (data as any).results.map(mapUser);
-  }
-
-  // Anything else is unexpected -> avoid .filter crash
-  console.error("Unexpected /users/ payload shape:", data);
   return [];
 }
-
 
 // ----------------------------
 // GET USER BY ID
@@ -73,11 +58,13 @@ export async function getUser(id: number): Promise<User> {
   });
 
   if (!res.ok) throw new Error("Failed to load user");
-  return res.json();
+
+  return mapUser(await res.json());
 }
 
 // ----------------------------
 // CREATE USER (ADMIN)
+// ----------------------------
 export async function createUser(data: any): Promise<User> {
   const payload = {
     firstName: data.firstName,
@@ -85,7 +72,7 @@ export async function createUser(data: any): Promise<User> {
     email: data.email,
     registered_payment_method: data.registered_payment_method || "",
     role: data.role,
-    password: data.password,   // <--- IMPORTANT
+    password: data.password,
   };
 
   const res = await fetch(BASE_URL, {
@@ -94,19 +81,23 @@ export async function createUser(data: any): Promise<User> {
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) throw new Error("Failed to create user");
-  return res.json();
+  const json = await res.json();
+  if (!res.ok) {
+    console.error(json);
+    throw new Error("Failed to create user");
+  }
+
+  return mapUser(json);
 }
 
-
 // ----------------------------
-// UPDATE USER (ADMIN)
+// UPDATE USER
 // ----------------------------
 export async function updateUser(id: number, data: any): Promise<User> {
   const payload = {
-    firstName: data.firstName,
-    lastName: data.lastName,
-    email: data.email,
+    name: data.firstName,
+    surname: data.lastName,
+    email_address: data.email,
     registered_payment_method: data.registered_payment_method || "",
     role: data.role,
   };
@@ -118,11 +109,11 @@ export async function updateUser(id: number, data: any): Promise<User> {
   });
 
   if (!res.ok) throw new Error("Failed to update user");
-  return res.json();
+  return mapUser(await res.json());
 }
 
 // ----------------------------
-// DELETE USER (ADMIN)
+// DELETE USER
 // ----------------------------
 export async function deleteUser(id: number): Promise<void> {
   const res = await fetch(`${BASE_URL}${id}/`, {
@@ -134,15 +125,16 @@ export async function deleteUser(id: number): Promise<void> {
 }
 
 // ----------------------------
-// UPDATE PROFILE (GUEST)
+// UPDATE PROFILE
 // ----------------------------
 export async function updateProfile(id: number, data: any): Promise<User> {
   const payload = {
     firstName: data.firstName,
     lastName: data.lastName,
     email: data.email,
-    registered_payment_method: data.registered_payment_method || "",
+    registered_payment_method: data.registered_payment_method,
   };
+
 
   const res = await fetch(`${BASE_URL}${id}/update-profile/`, {
     method: "PUT",
@@ -151,17 +143,17 @@ export async function updateProfile(id: number, data: any): Promise<User> {
   });
 
   if (!res.ok) throw new Error("Failed to update profile");
-  return res.json();
+  return mapUser(await res.json());
 }
 
 // ----------------------------
-// CHANGE PASSWORD (GUEST)
+// CHANGE PASSWORD
 // ----------------------------
 export async function updatePassword(
   id: number,
   oldPassword: string,
   newPassword: string
-): Promise<{ detail: string }> {
+) {
   const payload = {
     old_password: oldPassword,
     new_password: newPassword,
@@ -177,8 +169,7 @@ export async function updatePassword(
   return res.json();
 }
 
-
 // ----------------------------
-// ROLES AVAILABLE
+// ROLES
 // ----------------------------
 export const allRoles: UserRole[] = ["ADMIN", "GUEST", "WORKER"];
